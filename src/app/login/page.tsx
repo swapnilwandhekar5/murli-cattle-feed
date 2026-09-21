@@ -99,8 +99,18 @@ export default function LoginPage() {
 
           </form>
 
+          <div className="text-center mt-6">
+            <button
+              type="button"
+              onClick={() => router.push("/signup")}
+              className="text-sm font-semibold text-green-600 hover:text-green-700"
+            >
+              Create Business Account
+            </button>
+          </div>
+
           <p className="text-center text-xs text-slate-400 mt-8">
-            MURLI Cattle Feed • Management System
+            FEEDORA • Smart Feed Business Management
           </p>
 
         </div>
