@@ -10,6 +10,7 @@ import {
   Factory,
   Boxes,
   ShoppingCart,
+  FileText,
   Users,
   CreditCard,
   BookOpen,
@@ -42,6 +43,7 @@ const menuSections = [
   {
     title: "SALES & CUSTOMERS",
     items: [
+      { name: "New Bill", href: "/billing", icon: FileText },
       { name: "Sales", href: "/sales", icon: ShoppingCart },
       { name: "Customers", href: "/customers", icon: Users },
       { name: "Customer Payments", href: "/customer-payments", icon: CreditCard },
