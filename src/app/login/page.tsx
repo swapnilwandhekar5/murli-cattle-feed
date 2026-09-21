@@ -17,18 +17,71 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
 
+    const user = authData.user;
+
+    if (!user) {
+      setLoading(false);
+      setError("Login failed. Please try again.");
+      return;
+    }
+
+    const { data: membership, error: membershipError } = await supabase
+      .from("company_members")
+      .select("company_id, companies(name, approval_status)")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (membershipError) {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("Unable to check business approval status.");
+      return;
+    }
+
+    if (!membership) {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("No business account is linked to this login.");
+      return;
+    }
+
+    const company = Array.isArray(membership.companies)
+      ? membership.companies[0]
+      : membership.companies;
+
+    if (company?.approval_status === "pending") {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("Your business account is pending admin approval.");
+      return;
+    }
+
+    if (company?.approval_status === "rejected") {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("Your business account has been rejected by admin.");
+      return;
+    }
+
+    if (company?.approval_status !== "approved") {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setError("Your business account is not approved.");
+      return;
+    }
+
+    setLoading(false);
     router.push("/dashboard");
   }
 
