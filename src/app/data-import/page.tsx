@@ -35,6 +35,7 @@ const importOptions = [
 
 export default function DataImportPage() {
   const [selected, setSelected] = useState("");
+  const [file, setFile] = useState<File | null>(null);
 
   return (
     <main className="min-h-screen bg-slate-100 p-6">
@@ -98,19 +99,48 @@ export default function DataImportPage() {
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              Upload your Excel or CSV file. Import mapping will be added
-              here next.
+              Select an Excel or CSV file from your previous software.
             </p>
 
-            <div className="mt-5 rounded-xl border-2 border-dashed border-slate-300 p-8 text-center">
-              <p className="text-sm font-medium text-slate-700">
-                Excel / CSV upload
-              </p>
+            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-green-300 bg-green-50 p-8 text-center transition hover:bg-green-100">
+              <span className="text-sm font-bold text-green-700">
+                📁 Choose Excel / CSV File
+              </span>
 
-              <p className="mt-1 text-xs text-slate-400">
-                Import template support will be available here.
-              </p>
-            </div>
+              <span className="mt-2 text-xs text-slate-500">
+                Supported: .xlsx, .xls, .csv
+              </span>
+
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </label>
+
+            {file && (
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
+                <p className="text-sm font-semibold text-green-800">
+                  Selected File
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  {file.name}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {(file.size / 1024).toFixed(1)} KB
+                </p>
+              </div>
+            )}
+
+            {file && (
+              <button
+                type="button"
+                className="mt-4 rounded-xl bg-green-600 px-5 py-3 text-sm font-bold text-white hover:bg-green-700"
+              >
+                Continue to Preview →
+              </button>
+            )}
           </div>
         )}
       </div>
