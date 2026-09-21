@@ -60,6 +60,7 @@ const menuSections = [
   {
     title: "SYSTEM",
     items: [
+      { name: "Data Import", href: "/data-import", icon: Package },
       { name: "Settings", href: "/settings", icon: Settings },
     ],
   },
