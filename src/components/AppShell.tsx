@@ -78,9 +78,10 @@ export default function AppShell({
   const [userEmail, setUserEmail] = useState("");
 
   const isLoginPage = pathname === "/login";
+  const isSignupPage = pathname === "/signup" || pathname === "/signup/";
 
   useEffect(() => {
-    if (isLoginPage) {
+    if (isLoginPage || isSignupPage) {
       setCheckingAuth(false);
       return;
     }
@@ -106,7 +107,7 @@ export default function AppShell({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session && !isLoginPage) {
+      if (!session && !isLoginPage && !isSignupPage) {
         router.replace("/login");
         return;
       }
@@ -128,7 +129,7 @@ export default function AppShell({
     router.replace("/login");
   }
 
-  if (isLoginPage) {
+  if (isLoginPage || isSignupPage) {
     return <>{children}</>;
   }
 
