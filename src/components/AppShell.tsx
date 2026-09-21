@@ -60,6 +60,7 @@ const menuSections = [
   {
     title: "SYSTEM",
     items: [
+      { name: "Business Approvals", href: "/admin/approvals", icon: Settings },
       { name: "Settings", href: "/settings", icon: Settings },
     ],
   },
