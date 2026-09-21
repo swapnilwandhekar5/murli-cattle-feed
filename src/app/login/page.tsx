@@ -102,7 +102,7 @@ export default function LoginPage() {
           <div className="text-center mt-6">
             <button
               type="button"
-              onClick={() => router.push("/signup")}
+              onClick={() => window.location.href = "/signup/"}
               className="text-sm font-semibold text-green-600 hover:text-green-700"
             >
               Create Business Account
