@@ -60,7 +60,6 @@ const menuSections = [
   {
     title: "SYSTEM",
     items: [
-      { name: "Business Approvals", href: "/admin/approvals", icon: Settings },
       { name: "Settings", href: "/settings", icon: Settings },
     ],
   },
@@ -134,6 +133,22 @@ export default function AppShell({
     return <>{children}</>;
   }
 
+  const visibleMenuSections = menuSections.map((section) => {
+    if (section.title !== "SYSTEM") return section;
+
+    if (userEmail === "murlicowfeed@gmail.com") {
+      return {
+        ...section,
+        items: [
+          { name: "Business Approvals", href: "/admin/approvals", icon: Settings },
+          ...section.items,
+        ],
+      };
+    }
+
+    return section;
+  });
+
   if (checkingAuth) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -186,7 +201,7 @@ export default function AppShell({
           </div>
 
           <nav className="flex-1 overflow-y-auto px-3 py-5">
-            {menuSections.map((section) => (
+            {visibleMenuSections.map((section) => (
               <div key={section.title} className="mb-6">
                 <div className="px-3 pb-2 text-[10px] font-bold tracking-[0.16em] text-slate-500">
                   {section.title}
