@@ -77,7 +77,7 @@ export default function AppShell({
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [userEmail, setUserEmail] = useState("");
 
-  const isLoginPage = pathname === "/login";
+  const isLoginPage = pathname === "/login" || pathname === "/login/";
   const isSignupPage = pathname === "/signup" || pathname === "/signup/";
 
   useEffect(() => {
