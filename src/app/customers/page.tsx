@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 import {
   Plus,
   Search,
@@ -39,11 +40,14 @@ export default function CustomersPage() {
   const [openingBalance, setOpeningBalance] = useState("0");
 
   async function loadCustomers() {
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) return;
     setLoading(true);
 
     const { data, error } = await supabase
       .from("customers")
       .select("*")
+      .eq("company_id", companyId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -89,12 +93,19 @@ export default function CustomersPage() {
   async function saveCustomer(e: React.FormEvent) {
     e.preventDefault();
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      alert("Company information nahi mili. Please login again.");
+      return;
+    }
+
     if (!name.trim()) {
       alert("Customer name required");
       return;
     }
 
     const customerData = {
+      company_id: companyId,
       name: name.trim(),
       phone: phone.trim() || null,
       email: email.trim() || null,
@@ -107,7 +118,8 @@ export default function CustomersPage() {
       const { error } = await supabase
         .from("customers")
         .update(customerData)
-        .eq("id", editingId);
+        .eq("id", editingId)
+        .eq("company_id", companyId);
 
       if (error) {
         alert("Customer update error: " + error.message);

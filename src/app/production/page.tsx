@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type Product = {
   id: string;
@@ -84,17 +85,26 @@ export default function ProductionPage() {
   async function loadData() {
     setLoading(true);
 
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      setLoading(false);
+      return;
+    }
+
     const [productsResult, materialsResult, productionResult] =
       await Promise.all([
         supabase
           .from("products")
           .select("id, name, code, bag_size_kg")
+          .eq("company_id", companyId)
           .eq("active", true)
           .order("name"),
 
         supabase
           .from("raw_materials")
           .select("id, name, unit, purchase_rate")
+          .eq("company_id", companyId)
           .eq("active", true)
           .order("name"),
 
@@ -149,10 +159,14 @@ export default function ProductionPage() {
 
     if (!selectedProductId) return;
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) return;
+
     const { data: recipeData, error: recipeError } = await supabase
       .from("recipes")
       .select("id, product_id, quantity_kg")
       .eq("product_id", selectedProductId)
+      .eq("company_id", companyId)
       .eq("active", true)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -241,6 +255,13 @@ export default function ProductionPage() {
   const costPerBag = bags > 0 ? totalProductionCost / bags : 0;
 
   async function saveProduction() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company information nahi mili. Please login again.");
+      return;
+    }
+
     if (!productId) {
       alert("Product select karo");
       return;
@@ -271,6 +292,7 @@ export default function ProductionPage() {
     const { data: production, error: productionError } = await supabase
       .from("production_batches")
       .insert({
+        company_id: companyId,
         product_id: productId,
         recipe_id: recipe.id,
         batch_number: batchNumber.trim(),
@@ -296,6 +318,7 @@ export default function ProductionPage() {
     }
 
     const productionItems = calculatedItems.map((item) => ({
+      company_id: companyId,
       production_id: production.id,
       raw_material_id: item.raw_material_id,
       quantity_used_kg: item.requiredQty,
@@ -311,7 +334,8 @@ export default function ProductionPage() {
       await supabase
         .from("production_batches")
         .delete()
-        .eq("id", production.id);
+        .eq("id", production.id)
+        .eq("company_id", companyId);
 
       alert("Production items error: " + itemsError.message);
       setSaving(false);
@@ -328,12 +352,14 @@ export default function ProductionPage() {
         await supabase
           .from("production_batches")
           .delete()
-          .eq("id", production.id);
+          .eq("id", production.id)
+          .eq("company_id", companyId);
 
         await supabase
           .from("production_items")
           .delete()
-          .eq("production_id", production.id);
+          .eq("production_id", production.id)
+          .eq("company_id", companyId);
 
         alert("Raw material not found.");
         setSaving(false);
@@ -345,6 +371,7 @@ export default function ProductionPage() {
           .from("raw_materials")
           .select("current_stock")
           .eq("id", item.raw_material_id)
+          .eq("company_id", companyId)
           .single()).data?.current_stock || 0
       );
 
@@ -354,12 +381,14 @@ export default function ProductionPage() {
         await supabase
           .from("production_batches")
           .delete()
-          .eq("id", production.id);
+          .eq("id", production.id)
+          .eq("company_id", companyId);
 
         await supabase
           .from("production_items")
           .delete()
-          .eq("production_id", production.id);
+          .eq("production_id", production.id)
+          .eq("company_id", companyId);
 
         alert(
           `${material.name} ka stock insufficient hai. Available: ${currentStock.toFixed(
@@ -375,7 +404,8 @@ export default function ProductionPage() {
         .update({
           current_stock: newStock,
         })
-        .eq("id", item.raw_material_id);
+        .eq("id", item.raw_material_id)
+        .eq("company_id", companyId);
 
       if (stockError) {
         alert("Stock update error: " + stockError.message);
@@ -388,6 +418,7 @@ export default function ProductionPage() {
     const { error: finishedStockError } = await supabase
       .from("finished_goods_stock")
       .insert({
+        company_id: companyId,
         product_id: productId,
         batch_number: batchNumber,
         quantity_bags: Number(bagsProduced),

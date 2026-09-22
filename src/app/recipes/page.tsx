@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type Product = {
   id: string;
@@ -46,6 +47,8 @@ export default function RecipesPage() {
   const [saving, setSaving] = useState(false);
 
   async function loadData() {
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) return;
     setLoading(true);
 
     const [productsResult, materialsResult, recipesResult] =
@@ -53,12 +56,14 @@ export default function RecipesPage() {
         supabase
           .from("products")
           .select("id, name, code, bag_size_kg")
+          .eq("company_id", companyId)
           .eq("active", true)
           .order("name"),
 
         supabase
           .from("raw_materials")
           .select("id, name, unit, purchase_rate")
+          .eq("company_id", companyId)
           .eq("active", true)
           .order("name"),
 
@@ -67,6 +72,7 @@ export default function RecipesPage() {
           .select(
             "id, product_id, quantity_kg, products(name, bag_size_kg)"
           )
+          .eq("company_id", companyId)
           .order("created_at", { ascending: false }),
       ]);
 
@@ -152,6 +158,12 @@ export default function RecipesPage() {
   async function saveRecipe(e: React.FormEvent) {
     e.preventDefault();
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      alert("Company information nahi mili. Please login again.");
+      return;
+    }
+
     if (!productId) {
       alert("Please select a product");
       return;
@@ -199,6 +211,7 @@ export default function RecipesPage() {
       await supabase
         .from("recipes")
         .insert({
+          company_id: companyId,
           name: selectedProduct?.name ?? "Recipe",
           product_id: productId,
           quantity_kg: totalQuantity,

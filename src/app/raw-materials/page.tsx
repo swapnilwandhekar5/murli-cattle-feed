@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type RawMaterial = {
   id: string;
@@ -29,6 +30,8 @@ export default function RawMaterialsPage() {
   const [supplier, setSupplier] = useState("");
 
   async function loadMaterials() {
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) return;
     setLoading(true);
 
     const { data, error } = await supabase
@@ -37,6 +40,7 @@ export default function RawMaterialsPage() {
         "id, name, code, unit, current_stock, minimum_stock, purchase_rate, supplier_name, active"
       )
       .eq("active", true)
+      .eq("company_id", companyId)
       .order("name");
 
     if (error) {
@@ -55,6 +59,12 @@ export default function RawMaterialsPage() {
   async function addMaterial(e: React.FormEvent) {
     e.preventDefault();
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      alert("Company information nahi mili. Please login again.");
+      return;
+    }
+
     if (!name.trim()) {
       alert("Material name is required");
       return;
@@ -63,6 +73,7 @@ export default function RawMaterialsPage() {
     setSaving(true);
 
     const { error } = await supabase.from("raw_materials").insert({
+      company_id: companyId,
       name: name.trim(),
       code: code.trim() || null,
       unit,

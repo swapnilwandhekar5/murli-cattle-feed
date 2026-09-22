@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type Product = {
   id: string;
@@ -78,6 +79,12 @@ export default function SalesPage() {
   async function loadData() {
     setLoading(true);
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      setLoading(false);
+      return;
+    }
+
     const [
       productsResult,
       customersResult,
@@ -87,11 +94,13 @@ export default function SalesPage() {
       supabase
         .from("products")
         .select("id,name,code,bag_size_kg")
+        .eq("company_id", companyId)
         .order("name"),
 
       supabase
         .from("customers")
         .select("id,name,phone")
+        .eq("company_id", companyId)
         .order("name"),
 
       supabase
@@ -99,6 +108,7 @@ export default function SalesPage() {
         .select(
           "id,product_id,batch_number,quantity_bags,quantity_kg,bag_size_kg,manufacturing_date"
         )
+        .eq("company_id", companyId)
         .gt("quantity_bags", 0)
         .order("manufacturing_date", { ascending: true }),
 
@@ -107,6 +117,7 @@ export default function SalesPage() {
         .select(
           "id,invoice_number,sale_date,total_amount,paid_amount,due_amount,customer_id"
         )
+        .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
     ]);
 
@@ -139,6 +150,9 @@ export default function SalesPage() {
   }, []);
 
   async function createCustomerIfNeeded(): Promise<string | null> {
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) return null;
+
     if (customerId) {
       return customerId;
     }
@@ -150,6 +164,7 @@ export default function SalesPage() {
     const { data, error } = await supabase
       .from("customers")
       .insert({
+        company_id: companyId,
         name: customerName.trim(),
         phone: customerPhone.trim() || null,
       })
@@ -213,6 +228,13 @@ export default function SalesPage() {
 
     setSaving(true);
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      alert("Company not found. Please login again.");
+      setSaving(false);
+      return;
+    }
+
     try {
       const newCustomerId = await createCustomerIfNeeded();
 
@@ -231,6 +253,7 @@ export default function SalesPage() {
           .select(
             "id,product_id,batch_number,quantity_bags,quantity_kg,bag_size_kg,manufacturing_date"
           )
+          .eq("company_id", companyId)
           .eq("product_id", productId)
           .gt("quantity_bags", 0)
           .order("manufacturing_date", { ascending: true });
@@ -254,6 +277,7 @@ export default function SalesPage() {
       const { data: sale, error: saleError } = await supabase
         .from("sales")
         .insert({
+          company_id: companyId,
           customer_id: newCustomerId,
           invoice_number: invoiceNumber.trim(),
           sale_date: saleDate,
@@ -283,7 +307,7 @@ export default function SalesPage() {
         });
 
       if (itemError) {
-        await supabase.from("sales").delete().eq("id", sale.id);
+        await supabase.from("sales").delete().eq("id", sale.id).eq("company_id", companyId);
         throw new Error("Sale item save error: " + itemError.message);
       }
 
@@ -328,6 +352,7 @@ export default function SalesPage() {
         const { error: ledgerError } = await supabase
           .from("party_ledger")
           .insert({
+            company_id: companyId,
             customer_id: newCustomerId,
             transaction_date: saleDate,
             transaction_type: "SALE",

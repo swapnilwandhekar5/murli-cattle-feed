@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type Product = {
   id: string;
@@ -21,11 +22,14 @@ export default function ProductsPage() {
   const [bagSize, setBagSize] = useState("50");
 
   async function loadProducts() {
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) return;
     setLoading(true);
 
     const { data, error } = await supabase
       .from("products")
       .select("id, name, code, bag_size_kg, active")
+      .eq("company_id", companyId)
       .eq("active", true)
       .order("name");
 
@@ -45,6 +49,12 @@ export default function ProductsPage() {
   async function addProduct(e: React.FormEvent) {
     e.preventDefault();
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      alert("Company information nahi mili. Please login again.");
+      return;
+    }
+
     if (!name.trim()) {
       alert("Product name is required");
       return;
@@ -58,6 +68,7 @@ export default function ProductsPage() {
     setSaving(true);
 
     const { error } = await supabase.from("products").insert({
+      company_id: companyId,
       name: name.trim(),
       code: code.trim() || null,
       bag_size_kg: Number(bagSize),

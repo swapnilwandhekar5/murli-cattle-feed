@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 import { Plus, Search, Truck, X } from "lucide-react";
 
 type Supplier = {
@@ -31,9 +32,16 @@ export default function SuppliersPage() {
   async function loadSuppliers() {
     setLoading(true);
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("suppliers")
       .select("*")
+      .eq("company_id", companyId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -58,7 +66,14 @@ export default function SuppliersPage() {
       return;
     }
 
+    const companyId = await getCurrentCompanyId();
+    if (!companyId) {
+      alert("Company not found. Please login again.");
+      return;
+    }
+
     const { error } = await supabase.from("suppliers").insert({
+      company_id: companyId,
       name: name.trim(),
       phone: phone.trim() || null,
       email: email.trim() || null,
