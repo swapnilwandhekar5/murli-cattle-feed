@@ -19,14 +19,30 @@ export default function BillingPage() {
             </h1>
           </div>
 
-          <div className="flex gap-2">
-            <button className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">
-              Preview
-            </button>
-            <button className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white">
-              Save Invoice
-            </button>
-          </div>
+          <div className="flex flex-wrap gap-2 no-print">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold"
+              >
+                🖨️ Print Invoice
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                📄 Save PDF
+              </button>
+
+              <button
+                type="button"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Save Invoice
+              </button>
+            </div>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
@@ -252,6 +268,24 @@ export default function BillingPage() {
 
         </div>
       </div>
+    
+    <style jsx global>{`
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+
+        body {
+          background: white !important;
+        }
+
+        @page {
+          size: A4;
+          margin: 10mm;
+        }
+      }
+    `}</style>
     </main>
   );
 }
+
