@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase";
 type Customer = {
   id: string;
   name: string;
-  phone: string | null;
 };
 
 type LedgerEntry = {
@@ -29,7 +28,7 @@ export default function CustomerLedgerPage() {
   async function loadCustomers() {
     const { data, error } = await supabase
       .from("customers")
-      .select("id,name,phone")
+      .select("id,name")
       .order("name");
 
     if (error) {
@@ -119,7 +118,7 @@ export default function CustomerLedgerPage() {
             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
                 {customer.name}
-                {customer.phone ? ` - ${customer.phone}` : ""}
+                {customer.name}
               </option>
             ))}
           </select>

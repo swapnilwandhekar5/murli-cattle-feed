@@ -125,6 +125,27 @@ export default function DashboardPage() {
     try {
       setRefreshing(true);
 
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw new Error("User login session not found.");
+      }
+
+      const { data: member, error: memberError } = await supabase
+        .from("company_members")
+        .select("company_id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (memberError || !member?.company_id) {
+        throw new Error("Company information not found.");
+      }
+
+      const companyId = member.company_id;
+
       const [
         salesResult,
         productionResult,
@@ -138,6 +159,7 @@ export default function DashboardPage() {
           .select(
             "id, invoice_number, sale_date, total_amount, paid_amount, due_amount"
           )
+          .eq("company_id", companyId)
           .order("sale_date", { ascending: false })
           .limit(100),
 
@@ -146,27 +168,32 @@ export default function DashboardPage() {
           .select(
             "id, batch_number, production_date, bags_produced, total_production_cost, cost_per_bag"
           )
+          .eq("company_id", companyId)
           .order("production_date", { ascending: false })
           .limit(100),
 
         supabase
           .from("raw_materials")
           .select("id, name, current_stock, minimum_stock")
+          .eq("company_id", companyId)
           .order("name"),
 
         supabase
           .from("finished_goods_stock")
           .select("id, quantity_bags, quantity_kg, products(name)")
+          .eq("company_id", companyId)
           .order("created_at", { ascending: false }),
 
         supabase
           .from("bank_accounts")
           .select("id, account_name, account_type, current_balance")
+          .eq("company_id", companyId)
           .order("account_name"),
 
         supabase
           .from("payments")
           .select("id, payment_date, amount, payment_mode")
+          .eq("company_id", companyId)
           .order("payment_date", { ascending: false })
           .limit(10),
       ]);
