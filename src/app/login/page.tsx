@@ -92,15 +92,15 @@ export default function LoginPage() {
 
           <div className="text-center mb-8">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-green-600 text-white text-2xl font-bold shadow-lg">
-              M
+              F
             </div>
 
             <h1 className="text-3xl font-bold text-slate-900">
-              MURLI
+              FEEDORA
             </h1>
 
             <p className="mt-1 text-slate-500">
-              Cattle Feed Management System
+              Smart Feed Business Management
             </p>
           </div>
 
