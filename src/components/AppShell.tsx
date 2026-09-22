@@ -79,6 +79,7 @@ export default function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [userEmail, setUserEmail] = useState("");
+  const [companyName, setCompanyName] = useState("FEEDORA");
 
   const isLoginPage = pathname === "/login" || pathname === "/login/";
   const isSignupPage = pathname === "/signup" || pathname === "/signup/";
@@ -101,7 +102,34 @@ export default function AppShell({
         return;
       }
 
-      setUserEmail(data.session.user.email ?? "");
+      const user = data.session.user;
+
+      setUserEmail(user.email ?? "");
+
+      const { data: membership, error: membershipError } = await supabase
+        .from("user_memberships")
+        .select("company_id, companies(name, approval_status)")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!mounted) return;
+
+      if (!membershipError && membership?.company_id) {
+        const company = Array.isArray(membership.companies)
+          ? membership.companies[0]
+          : membership.companies;
+
+        if (company?.name) {
+          setCompanyName(company.name);
+        }
+      } else {
+        const metadataCompanyName = user.user_metadata?.company_name;
+
+        if (metadataCompanyName) {
+          setCompanyName(metadataCompanyName);
+        }
+      }
+
       setCheckingAuth(false);
     }
 
@@ -117,7 +145,6 @@ export default function AppShell({
 
       if (session) {
         setUserEmail(session.user.email ?? "");
-        setCheckingAuth(false);
       }
     });
 
@@ -125,7 +152,7 @@ export default function AppShell({
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [isLoginPage, router]);
+  }, [isLoginPage, isSignupPage, router]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -157,7 +184,7 @@ export default function AppShell({
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="text-center">
           <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-green-600" />
-          <p className="text-sm text-slate-500">Loading MURLI...</p>
+          <p className="text-sm text-slate-500">Loading...</p>
         </div>
       </div>
     );
@@ -186,12 +213,16 @@ export default function AppShell({
               className="flex items-center gap-3"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-600 text-lg font-bold shadow-lg">
-                M
+                {companyName.charAt(0).toUpperCase()}
               </div>
 
-              <div>
-                <div className="font-bold tracking-wide">MURLI</div>
-                <div className="text-xs text-slate-400">Cattle Feed</div>
+              <div className="min-w-0">
+                <div className="font-bold tracking-wide truncate max-w-[170px]">
+                  {companyName}
+                </div>
+                <div className="text-xs text-slate-400">
+                  Business Management
+                </div>
               </div>
             </Link>
 
@@ -247,6 +278,9 @@ export default function AppShell({
               <p className="mt-1 truncate text-xs text-slate-300">
                 {userEmail || "Admin"}
               </p>
+              <p className="mt-1 truncate text-xs font-semibold text-green-400">
+                {companyName}
+              </p>
             </div>
 
             <button
@@ -271,10 +305,10 @@ export default function AppShell({
 
           <div>
             <h1 className="text-sm font-bold text-slate-800">
-              MURLI Cattle Feed
+              {companyName}
             </h1>
             <p className="text-xs text-slate-400">
-              Manufacturing Management System
+              Business Management System
             </p>
           </div>
         </header>
