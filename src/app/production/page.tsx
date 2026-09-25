@@ -78,6 +78,28 @@ export default function ProductionPage() {
   const [notes, setNotes] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [showNewProduct, setShowNewProduct] = useState(false);
+  const [showNewMaterial, setShowNewMaterial] = useState(false);
+  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
+
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductCode, setNewProductCode] = useState("");
+  const [newProductBagSize, setNewProductBagSize] = useState("");
+  const [newProductSellingPrice, setNewProductSellingPrice] = useState("");
+
+  const [newMaterialName, setNewMaterialName] = useState("");
+  const [newMaterialCode, setNewMaterialCode] = useState("");
+  const [newMaterialUnit, setNewMaterialUnit] = useState("KG");
+  const [newMaterialRate, setNewMaterialRate] = useState("");
+  const [newMaterialStock, setNewMaterialStock] = useState("");
+  const [newMaterialMinimumStock, setNewMaterialMinimumStock] = useState("");
+  const [newMaterialVendor, setNewMaterialVendor] = useState("");
+
+  const [recipeName, setRecipeName] = useState("");
+  const [recipeBatchKg, setRecipeBatchKg] = useState("");
+  const [recipeRows, setRecipeRows] = useState<
+    { raw_material_id: string; quantity_kg: string }[]
+  >([]);
   const [saving, setSaving] = useState(false);
 
   const selectedProduct = products.find((p) => p.id === productId);
@@ -86,6 +108,258 @@ export default function ProductionPage() {
     loadData();
   }, []);
 
+  async function saveNewProduct() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company nahi mili");
+      return;
+    }
+
+    if (!newProductName.trim()) {
+      alert("Product name enter karo");
+      return;
+    }
+
+    const bagSize = Number(newProductBagSize || 0);
+    const sellingPrice = Number(newProductSellingPrice || 0);
+
+    if (bagSize <= 0) {
+      alert("Bag size 0 se greater hona chahiye");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("products")
+      .insert({
+        company_id: companyId,
+        name: newProductName.trim(),
+        code: newProductCode.trim() || null,
+        bag_size_kg: bagSize,
+        selling_price: sellingPrice,
+        current_stock_bags: 0,
+        active: true,
+      })
+      .select("id, name, code, bag_size_kg")
+      .single();
+
+    if (error) {
+      alert("Product save error: " + error.message);
+      return;
+    }
+
+    setProducts((current) =>
+      [...current, data as Product].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    );
+
+    setProductId(data.id);
+    setNewProductName("");
+    setNewProductCode("");
+    setNewProductBagSize("");
+    setNewProductSellingPrice("");
+    setShowNewProduct(false);
+
+    alert("Product successfully create ho gaya.");
+    await loadRecipe(data.id);
+  }
+
+  async function saveNewMaterial() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company nahi mili");
+      return;
+    }
+
+    if (!newMaterialName.trim()) {
+      alert("Raw material name enter karo");
+      return;
+    }
+
+    const purchaseRate = Number(newMaterialRate || 0);
+    const openingStock = Number(newMaterialStock || 0);
+    const minimumStock = Number(newMaterialMinimumStock || 0);
+
+    if (purchaseRate < 0 || openingStock < 0 || minimumStock < 0) {
+      alert("Stock/rate negative nahi ho sakta");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("raw_materials")
+      .insert({
+        company_id: companyId,
+        name: newMaterialName.trim(),
+        code: newMaterialCode.trim() || null,
+        unit: newMaterialUnit || "KG",
+        current_stock: openingStock,
+        minimum_stock: minimumStock,
+        purchase_rate: purchaseRate,
+        supplier_name: newMaterialVendor.trim() || null,
+        active: true,
+      })
+      .select("id, name, unit, purchase_rate")
+      .single();
+
+    if (error) {
+      alert("Raw material save error: " + error.message);
+      return;
+    }
+
+    setMaterials((current) =>
+      [...current, data as Material].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    );
+
+    setNewMaterialName("");
+    setNewMaterialCode("");
+    setNewMaterialUnit("KG");
+    setNewMaterialRate("");
+    setNewMaterialStock("");
+    setNewMaterialMinimumStock("");
+    setNewMaterialVendor("");
+    setShowNewMaterial(false);
+
+    alert("Raw material successfully create ho gaya.");
+  }
+
+  function addRecipeRow() {
+    setRecipeRows((current) => [
+      ...current,
+      {
+        raw_material_id: "",
+        quantity_kg: "",
+      },
+    ]);
+  }
+
+  function updateRecipeRow(
+    index: number,
+    field: "raw_material_id" | "quantity_kg",
+    value: string
+  ) {
+    setRecipeRows((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              [field]: value,
+            }
+          : row
+      )
+    );
+  }
+
+  function removeRecipeRow(index: number) {
+    setRecipeRows((current) =>
+      current.filter((_, rowIndex) => rowIndex !== index)
+    );
+  }
+
+  async function saveRecipe() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company nahi mili");
+      return;
+    }
+
+    if (!productId) {
+      alert("Pehle Product select karo");
+      return;
+    }
+
+    if (!recipeName.trim()) {
+      alert("Recipe name enter karo");
+      return;
+    }
+
+    const batchKg = Number(recipeBatchKg || 0);
+
+    if (batchKg <= 0) {
+      alert("Recipe batch KG enter karo");
+      return;
+    }
+
+    const validRows = recipeRows.filter(
+      (row) =>
+        row.raw_material_id &&
+        Number(row.quantity_kg || 0) > 0
+    );
+
+    if (validRows.length === 0) {
+      alert("Recipe me kam se kam ek raw material add karo");
+      return;
+    }
+
+    const totalRecipeKg = validRows.reduce(
+      (sum, row) => sum + Number(row.quantity_kg || 0),
+      0
+    );
+
+    if (Math.abs(totalRecipeKg - batchKg) > 0.001) {
+      alert(
+        `Recipe quantity ${totalRecipeKg.toFixed(
+          2
+        )} KG hai, lekin batch ${batchKg.toFixed(
+          2
+        )} KG hai. Dono same hone chahiye.`
+      );
+      return;
+    }
+
+    const { data: recipeData, error: recipeError } = await supabase
+      .from("recipes")
+      .insert({
+        company_id: companyId,
+        product_id: productId,
+        name: recipeName.trim(),
+        batch_size_kg: batchKg,
+        quantity_kg: batchKg,
+        active: true,
+      })
+      .select("id, product_id, quantity_kg")
+      .single();
+
+    if (recipeError) {
+      alert("Recipe save error: " + recipeError.message);
+      return;
+    }
+
+    const recipeItemsPayload = validRows.map((row) => ({
+      company_id: companyId,
+      recipe_id: recipeData.id,
+      raw_material_id: row.raw_material_id,
+      quantity_kg: Number(row.quantity_kg),
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("recipe_items")
+      .insert(recipeItemsPayload);
+
+    if (itemsError) {
+      await supabase
+        .from("recipes")
+        .delete()
+        .eq("id", recipeData.id)
+        .eq("company_id", companyId);
+
+      alert("Recipe items save error: " + itemsError.message);
+      return;
+    }
+
+    setRecipe(recipeData as Recipe);
+    setRecipeRows([]);
+    setRecipeName("");
+    setRecipeBatchKg("");
+    setShowRecipeEditor(false);
+
+    alert("Recipe successfully create ho gayi.");
+    await loadRecipe(productId);
+  }
   async function loadData() {
     setLoading(true);
 
@@ -504,6 +778,261 @@ export default function ProductionPage() {
     );
   }
 
+  if (showNewProduct) {
+    return (
+      <main className="min-h-screen bg-slate-100 p-4 md:p-8">
+        <div className="mx-auto max-w-2xl">
+          <div className="rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Create New Product
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Production module se product create karein
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowNewProduct(false)}
+                className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Product Name *
+                </label>
+                <input
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  placeholder="Example: MURLI Dairy Feed"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Product Code
+                </label>
+                <input
+                  value={newProductCode}
+                  onChange={(e) => setNewProductCode(e.target.value)}
+                  placeholder="Example: MDF-001"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Default Bag Size (KG) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newProductBagSize}
+                    onChange={(e) => setNewProductBagSize(e.target.value)}
+                    placeholder="50"
+                    className="w-full rounded-lg border p-3"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Selling Price / Bag
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newProductSellingPrice}
+                    onChange={(e) =>
+                      setNewProductSellingPrice(e.target.value)
+                    }
+                    placeholder="1200"
+                    className="w-full rounded-lg border p-3"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowNewProduct(false)}
+                className="rounded-lg border px-5 py-2 font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={saveNewProduct}
+                className="rounded-lg bg-blue-600 px-5 py-2 font-semibold text-white hover:bg-blue-700"
+              >
+                Save Product
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (showNewMaterial) {
+    return (
+      <main className="min-h-screen bg-slate-100 p-4 md:p-8">
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Create New Raw Material
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Production module se raw material create karein
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowNewMaterial(false)}
+                className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-medium">
+                  Raw Material Name *
+                </label>
+                <input
+                  value={newMaterialName}
+                  onChange={(e) => setNewMaterialName(e.target.value)}
+                  placeholder="Example: Maize"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Material Code
+                </label>
+                <input
+                  value={newMaterialCode}
+                  onChange={(e) => setNewMaterialCode(e.target.value)}
+                  placeholder="Example: RM-001"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Unit
+                </label>
+                <select
+                  value={newMaterialUnit}
+                  onChange={(e) => setNewMaterialUnit(e.target.value)}
+                  className="w-full rounded-lg border p-3"
+                >
+                  <option value="KG">KG</option>
+                  <option value="TON">TON</option>
+                  <option value="LITRE">LITRE</option>
+                  <option value="PCS">PCS</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Purchase Rate
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newMaterialRate}
+                  onChange={(e) => setNewMaterialRate(e.target.value)}
+                  placeholder="25"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Opening Stock
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newMaterialStock}
+                  onChange={(e) => setNewMaterialStock(e.target.value)}
+                  placeholder="500"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Minimum Stock Alert
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newMaterialMinimumStock}
+                  onChange={(e) =>
+                    setNewMaterialMinimumStock(e.target.value)
+                  }
+                  placeholder="100"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Vendor
+                </label>
+                <input
+                  value={newMaterialVendor}
+                  onChange={(e) => setNewMaterialVendor(e.target.value)}
+                  placeholder="Example: ABC Vendor"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowNewMaterial(false)}
+                className="rounded-lg border px-5 py-2 font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={saveNewMaterial}
+                className="rounded-lg bg-green-600 px-5 py-2 font-semibold text-white hover:bg-green-700"
+              >
+                Save Material
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8">
       <div className="mx-auto max-w-7xl">
@@ -525,18 +1054,44 @@ export default function ProductionPage() {
                 <label className="mb-1 block text-sm font-medium">
                   Product
                 </label>
-                <select
-                  value={productId}
-                  onChange={(e) => loadRecipe(e.target.value)}
-                  className="w-full rounded-lg border p-3"
-                >
-                  <option value="">Select Product</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} - {product.bag_size_kg} KG
-                    </option>
-                  ))}
-                </select>
+
+                <div className="flex gap-2">
+                  <select
+                    value={productId}
+                    onChange={(e) => loadRecipe(e.target.value)}
+                    className="w-full rounded-lg border p-3"
+                  >
+                    <option value="">Select Product</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} - {product.bag_size_kg} KG
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowNewProduct(true)}
+                    className="whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+                  >
+                    + New Product
+                  </button>
+                </div>
+
+                {productId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecipeName("");
+                      setRecipeBatchKg(String(selectedProduct?.bag_size_kg || ""));
+                      setRecipeRows([]);
+                      setShowRecipeEditor(true);
+                    }}
+                    className="mt-2 rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+                  >
+                    + Create / Edit Recipe
+                  </button>
+                )}
               </div>
 
               <div>
@@ -635,7 +1190,6 @@ export default function ProductionPage() {
                 </div>
               </div>
 <div className="mt-6 rounded-xl bg-slate-50 p-4">
-              <h3 className="mb-3 font-bold">Raw Material Consumption</h3>
 
               {recipeItems.length === 0 ? (
                 <p className="text-sm text-slate-500">
