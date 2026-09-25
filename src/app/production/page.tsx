@@ -311,27 +311,70 @@ export default function ProductionPage() {
       return;
     }
 
-    const { data: recipeData, error: recipeError } = await supabase
-      .from("recipes")
-      .insert({
-        company_id: companyId,
-        product_id: productId,
-        name: recipeName.trim(),
-        batch_size_kg: batchKg,
-        quantity_kg: batchKg,
-        active: true,
-      })
-      .select("id, product_id, quantity_kg")
-      .single();
+    let recipeId = recipe?.id || "";
 
-    if (recipeError) {
-      alert("Recipe save error: " + recipeError.message);
-      return;
+    if (recipeId) {
+      const { data: updatedRecipe, error: recipeUpdateError } =
+        await supabase
+          .from("recipes")
+          .update({
+            product_id: productId,
+            name: recipeName.trim(),
+            batch_size_kg: batchKg,
+            quantity_kg: batchKg,
+            active: true,
+          })
+          .eq("id", recipeId)
+          .eq("company_id", companyId)
+          .select("id, product_id, quantity_kg")
+          .single();
+
+      if (recipeUpdateError) {
+        alert("Recipe update error: " + recipeUpdateError.message);
+        return;
+      }
+
+      recipeId = updatedRecipe.id;
+
+      const { error: deleteItemsError } = await supabase
+        .from("recipe_items")
+        .delete()
+        .eq("recipe_id", recipeId)
+        .eq("company_id", companyId);
+
+      if (deleteItemsError) {
+        alert(
+          "Old recipe items delete error: " +
+            deleteItemsError.message
+        );
+        return;
+      }
+    } else {
+      const { data: newRecipe, error: recipeError } =
+        await supabase
+          .from("recipes")
+          .insert({
+            company_id: companyId,
+            product_id: productId,
+            name: recipeName.trim(),
+            batch_size_kg: batchKg,
+            quantity_kg: batchKg,
+            active: true,
+          })
+          .select("id, product_id, quantity_kg")
+          .single();
+
+      if (recipeError) {
+        alert("Recipe save error: " + recipeError.message);
+        return;
+      }
+
+      recipeId = newRecipe.id;
     }
 
     const recipeItemsPayload = validRows.map((row) => ({
       company_id: companyId,
-      recipe_id: recipeData.id,
+      recipe_id: recipeId,
       raw_material_id: row.raw_material_id,
       quantity_kg: Number(row.quantity_kg),
     }));
@@ -341,24 +384,22 @@ export default function ProductionPage() {
       .insert(recipeItemsPayload);
 
     if (itemsError) {
-      await supabase
-        .from("recipes")
-        .delete()
-        .eq("id", recipeData.id)
-        .eq("company_id", companyId);
-
       alert("Recipe items save error: " + itemsError.message);
       return;
     }
 
-    setRecipe(recipeData as Recipe);
+    setShowRecipeEditor(false);
     setRecipeRows([]);
     setRecipeName("");
     setRecipeBatchKg("");
-    setShowRecipeEditor(false);
 
-    alert("Recipe successfully create ho gayi.");
     await loadRecipe(productId);
+
+    alert(
+      recipe?.id
+        ? "Recipe successfully update ho gayi."
+        : "Recipe successfully create ho gayi."
+    );
   }
   async function loadData() {
     setLoading(true);
@@ -1033,6 +1074,262 @@ export default function ProductionPage() {
     );
   }
 
+  if (showRecipeEditor) {
+    const recipeTotalKg = recipeRows.reduce(
+      (sum, row) => sum + Number(row.quantity_kg || 0),
+      0
+    );
+
+    return (
+      <main className="min-h-screen bg-slate-100 p-4 md:p-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">
+                Recipe Editor
+              </h1>
+              <p className="text-sm text-slate-500">
+                Product ke raw materials aur quantity yahin se manage karein.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRecipeEditor(false)}
+              className="rounded-lg border bg-white px-4 py-2 font-semibold text-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <div className="space-y-6 rounded-2xl bg-white p-6 shadow">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Product
+                </label>
+                <div className="rounded-lg border bg-slate-50 p-3 font-semibold">
+                  {selectedProduct?.name || "No Product Selected"}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Recipe Name
+                </label>
+                <input
+                  value={recipeName}
+                  onChange={(e) => setRecipeName(e.target.value)}
+                  placeholder="Example: Dairy Feed 47 KG"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Recipe Batch KG
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={recipeBatchKg}
+                  onChange={(e) => setRecipeBatchKg(e.target.value)}
+                  placeholder="47"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h2 className="text-lg font-bold">Raw Materials</h2>
+                <p className="text-sm text-slate-500">
+                  Har material ki quantity enter karein.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={addRecipeRow}
+                className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
+              >
+                + Add Raw Material
+              </button>
+            </div>
+
+            {recipeRows.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-8 text-center">
+                <p className="text-slate-500">
+                  Abhi koi raw material add nahi hai.
+                </p>
+
+                <div className="mt-4 flex justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={addRecipeRow}
+                    className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white"
+                  >
+                    + Add Raw Material
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowNewMaterial(true)}
+                    className="rounded-lg border border-blue-600 px-4 py-2 font-semibold text-blue-600"
+                  >
+                    + New Material
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recipeRows.map((row, index) => {
+                  const material = materials.find(
+                    (item) => item.id === row.raw_material_id
+                  );
+                  const quantity = Number(row.quantity_kg || 0);
+                  const rate = Number(material?.purchase_rate || 0);
+                  const cost = quantity * rate;
+
+                  return (
+                    <div
+                      key={`${index}-${row.raw_material_id}`}
+                      className="grid gap-3 rounded-xl border bg-slate-50 p-4 md:grid-cols-[2fr_1fr_1fr_1fr_auto]"
+                    >
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">
+                          Raw Material
+                        </label>
+                        <select
+                          value={row.raw_material_id}
+                          onChange={(e) =>
+                            updateRecipeRow(
+                              index,
+                              "raw_material_id",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border bg-white p-3"
+                        >
+                          <option value="">Select Material</option>
+                          {materials.map((materialItem) => (
+                            <option
+                              key={materialItem.id}
+                              value={materialItem.id}
+                            >
+                              {materialItem.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">
+                          Quantity KG
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={row.quantity_kg}
+                          onChange={(e) =>
+                            updateRecipeRow(
+                              index,
+                              "quantity_kg",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border bg-white p-3"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">
+                          Rate / KG
+                        </label>
+                        <div className="rounded-lg border bg-white p-3">
+                          ₹{rate.toFixed(2)}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">
+                          Cost
+                        </label>
+                        <div className="rounded-lg border bg-white p-3 font-semibold">
+                          ₹{cost.toFixed(2)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          onClick={() => removeRecipeRow(index)}
+                          className="w-full rounded-lg bg-red-100 px-3 py-3 font-semibold text-red-700 hover:bg-red-200"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="grid gap-4 rounded-xl bg-slate-900 p-5 text-white md:grid-cols-3">
+              <div>
+                <p className="text-sm text-slate-300">Recipe Total KG</p>
+                <p className="text-2xl font-bold">
+                  {recipeTotalKg.toFixed(2)} KG
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300">Target Batch</p>
+                <p className="text-2xl font-bold">
+                  {Number(recipeBatchKg || 0).toFixed(2)} KG
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-300">Difference</p>
+                <p className="text-2xl font-bold">
+                  {(recipeTotalKg - Number(recipeBatchKg || 0)).toFixed(2)} KG
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowNewMaterial(true)}
+                className="rounded-lg border border-blue-600 px-5 py-3 font-semibold text-blue-600 hover:bg-blue-50"
+              >
+                + New Material
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowRecipeEditor(false)}
+                className="rounded-lg border px-5 py-3 font-semibold"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={saveRecipe}
+                className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+              >
+                Save Recipe
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-8">
       <div className="mx-auto max-w-7xl">
