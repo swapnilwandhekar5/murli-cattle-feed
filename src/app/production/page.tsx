@@ -65,10 +65,14 @@ export default function ProductionPage() {
   const [productionDate, setProductionDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [capacityKg, setCapacityKg] = useState("");
+  const [bagWeightKg, setBagWeightKg] = useState("");
   const [bagsProduced, setBagsProduced] = useState("");
 
   const [labourCost, setLabourCost] = useState("");
   const [electricityCost, setElectricityCost] = useState("");
+  const [emptyBagCost, setEmptyBagCost] = useState("");
+  const [threadCost, setThreadCost] = useState("");
   const [packagingCost, setPackagingCost] = useState("");
   const [otherCost, setOtherCost] = useState("");
   const [notes, setNotes] = useState("");
@@ -216,9 +220,12 @@ export default function ProductionPage() {
     setRecipeItems(formatted);
   }
 
+  const capacity = Number(capacityKg || 0);
   const bags = Number(bagsProduced || 0);
-  const bagSize = Number(selectedProduct?.bag_size_kg || 0);
+  const bagSize = Number(bagWeightKg || 0);
   const totalQuantity = bags * bagSize;
+  const maxBags = bagSize > 0 && capacity > 0 ? Math.floor(capacity / bagSize) : 0;
+  const remainingCapacity = Math.max(capacity - totalQuantity, 0);
 
   const calculatedItems = useMemo(() => {
     return recipeItems.map((item) => {
@@ -246,11 +253,13 @@ export default function ProductionPage() {
 
   const labour = Number(labourCost || 0);
   const electricity = Number(electricityCost || 0);
+  const emptyBag = Number(emptyBagCost || 0);
+  const thread = Number(threadCost || 0);
   const packaging = Number(packagingCost || 0);
   const other = Number(otherCost || 0);
 
   const totalProductionCost =
-    rawMaterialCost + labour + electricity + packaging + other;
+    rawMaterialCost + labour + electricity + emptyBag + thread + packaging + other;
 
   const costPerBag = bags > 0 ? totalProductionCost / bags : 0;
 
@@ -272,8 +281,38 @@ export default function ProductionPage() {
       return;
     }
 
+    if (capacity <= 0) {
+      alert("Production capacity enter karo");
+      return;
+    }
+
+    if (bagSize <= 0) {
+      alert("Bag weight enter karo");
+      return;
+    }
+
+    if (capacity <= 0) {
+      alert("Production capacity enter karo");
+      return;
+    }
+
+    if (bagSize <= 0) {
+      alert("Bag weight enter karo");
+      return;
+    }
+
     if (bags <= 0) {
       alert("Bags produced 0 se greater hona chahiye");
+      return;
+    }
+
+    if (bags > maxBags || totalQuantity > capacity) {
+      alert(`Production capacity ${capacity} KG hai. ${bags} bags x ${bagSize} KG = ${totalQuantity} KG, jo capacity se zyada hai.`);
+      return;
+    }
+
+    if (bags > maxBags || totalQuantity > capacity) {
+      alert(`Production capacity ${capacity} KG hai. ${bags} bags x ${bagSize} KG = ${totalQuantity} KG, jo capacity se zyada hai.`);
       return;
     }
 
@@ -299,9 +338,13 @@ export default function ProductionPage() {
         production_date: productionDate,
         bags_produced: bags,
         total_quantity_kg: totalQuantity,
+        capacity_kg: capacity,
+        bag_weight_kg: bagSize,
         raw_material_cost: rawMaterialCost,
         labour_cost: labour,
         electricity_cost: electricity,
+        empty_bag_cost: emptyBag,
+        thread_cost: thread,
         packaging_cost: packaging,
         other_cost: other,
         total_production_cost: totalProductionCost,
@@ -433,7 +476,7 @@ export default function ProductionPage() {
       return;
     }
 
-    alert("Production saved successfully ✅ Raw material stock deducted + Finished stock added.");
+    alert("Production saved successfully Rs.  Raw material stock deducted + Finished stock added.");
 
     setProductId("");
     setRecipe(null);
@@ -520,22 +563,78 @@ export default function ProductionPage() {
                 />
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Bags Produced
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={bagsProduced}
-                  onChange={(e) => setBagsProduced(e.target.value)}
-                  placeholder="e.g. 100"
-                  className="w-full rounded-lg border p-3"
-                />
-              </div>
-            </div>
+              <div className="rounded-lg bg-blue-50 p-4">
+                <h3 className="mb-3 font-bold text-blue-900">Production Quantity</h3>
 
-            <div className="mt-6 rounded-xl bg-slate-50 p-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Production Capacity (KG)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={capacityKg}
+                      onChange={(e) => setCapacityKg(e.target.value)}
+                      placeholder="e.g. 600"
+                      className="w-full rounded-lg border p-3"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Bag Weight (KG)
+                    </label>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={bagWeightKg}
+                      onChange={(e) => setBagWeightKg(e.target.value)}
+                      placeholder="e.g. 47"
+                      className="w-full rounded-lg border p-3"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Bags Produced
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={bagsProduced}
+                      onChange={(e) => setBagsProduced(e.target.value)}
+                      placeholder="e.g. 12"
+                      className="w-full rounded-lg border p-3"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg bg-white p-3 shadow-sm">
+                    <div className="text-sm text-gray-500">Production Quantity</div>
+                    <div className="text-xl font-bold">
+                      {totalQuantity.toFixed(2)} KG
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-white p-3 shadow-sm">
+                    <div className="text-sm text-gray-500">Maximum Bags</div>
+                    <div className="text-xl font-bold">
+                      {maxBags}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-white p-3 shadow-sm">
+                    <div className="text-sm text-gray-500">Remaining Capacity</div>
+                    <div className="text-xl font-bold">
+                      {remainingCapacity.toFixed(2)} KG
+                    </div>
+                  </div>
+                </div>
+              </div>
+<div className="mt-6 rounded-xl bg-slate-50 p-4">
               <h3 className="mb-3 font-bold">Raw Material Consumption</h3>
 
               {recipeItems.length === 0 ? (
@@ -568,10 +667,10 @@ export default function ProductionPage() {
                             {item.requiredQty.toFixed(3)}
                           </td>
                           <td className="p-2">
-                            ₹{item.rate.toFixed(2)}
+                            Rs. {item.rate.toFixed(2)}
                           </td>
                           <td className="p-2">
-                            ₹{item.totalCost.toFixed(2)}
+                            Rs. {item.totalCost.toFixed(2)}
                           </td>
                         </tr>
                       ))}
@@ -591,7 +690,7 @@ export default function ProductionPage() {
                   min="0"
                   value={labourCost}
                   onChange={(e) => setLabourCost(e.target.value)}
-                  placeholder="₹"
+                  placeholder="Rs. "
                   className="w-full rounded-lg border p-3"
                 />
               </div>
@@ -605,7 +704,7 @@ export default function ProductionPage() {
                   min="0"
                   value={electricityCost}
                   onChange={(e) => setElectricityCost(e.target.value)}
-                  placeholder="₹"
+                  placeholder="Rs. "
                   className="w-full rounded-lg border p-3"
                 />
               </div>
@@ -619,7 +718,35 @@ export default function ProductionPage() {
                   min="0"
                   value={packagingCost}
                   onChange={(e) => setPackagingCost(e.target.value)}
-                  placeholder="₹"
+                  placeholder="Rs. "
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Empty Bag Cost
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={emptyBagCost}
+                  onChange={(e) => setEmptyBagCost(e.target.value)}
+                  placeholder="Rs. 0"
+                  className="w-full rounded-lg border p-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Thread Cost
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={threadCost}
+                  onChange={(e) => setThreadCost(e.target.value)}
+                  placeholder="Rs. 0"
                   className="w-full rounded-lg border p-3"
                 />
               </div>
@@ -633,7 +760,7 @@ export default function ProductionPage() {
                   min="0"
                   value={otherCost}
                   onChange={(e) => setOtherCost(e.target.value)}
-                  placeholder="₹"
+                  placeholder="Rs. "
                   className="w-full rounded-lg border p-3"
                 />
               </div>
@@ -657,6 +784,7 @@ export default function ProductionPage() {
             >
               {saving ? "Saving..." : "Save Production"}
             </button>
+          </div>
           </section>
 
           <section className="rounded-2xl bg-white p-6 shadow">
@@ -675,7 +803,7 @@ export default function ProductionPage() {
                   Raw Material Cost
                 </div>
                 <div className="text-2xl font-bold">
-                  ₹{rawMaterialCost.toFixed(2)}
+                  Rs. {rawMaterialCost.toFixed(2)}
                 </div>
               </div>
 
@@ -684,7 +812,7 @@ export default function ProductionPage() {
                   Other Production Costs
                 </div>
                 <div className="text-2xl font-bold">
-                  ₹
+                  Rs. 
                   {(labour + electricity + packaging + other).toFixed(2)}
                 </div>
               </div>
@@ -694,14 +822,14 @@ export default function ProductionPage() {
                   Total Production Cost
                 </div>
                 <div className="text-3xl font-bold text-green-800">
-                  ₹{totalProductionCost.toFixed(2)}
+                  Rs. {totalProductionCost.toFixed(2)}
                 </div>
               </div>
 
               <div className="rounded-lg bg-blue-50 p-4">
                 <div className="text-sm text-blue-700">Cost Per Bag</div>
                 <div className="text-3xl font-bold text-blue-800">
-                  ₹{costPerBag.toFixed(2)}
+                  Rs. {costPerBag.toFixed(2)}
                 </div>
               </div>
             </div>
@@ -742,10 +870,10 @@ export default function ProductionPage() {
                         {Number(production.total_quantity_kg).toFixed(2)} KG
                       </td>
                       <td className="p-3">
-                        ₹{Number(production.total_production_cost).toFixed(2)}
+                        Rs. {Number(production.total_production_cost).toFixed(2)}
                       </td>
                       <td className="p-3 font-semibold">
-                        ₹{Number(production.cost_per_bag).toFixed(2)}
+                        Rs. {Number(production.cost_per_bag).toFixed(2)}
                       </td>
                     </tr>
                   ))}
