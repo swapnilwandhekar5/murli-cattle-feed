@@ -37,6 +37,7 @@ type Recipe = {
 
 type Production = {
   id: string;
+  product_id: string;
   batch_number: string;
   production_date: string;
   bags_produced: number;
@@ -491,6 +492,7 @@ export default function ProductionPage() {
           .select(
             `
             id,
+            product_id,
             batch_number,
             production_date,
             bags_produced,
@@ -501,10 +503,10 @@ export default function ProductionPage() {
             packaging_cost,
             other_cost,
             total_production_cost,
-            cost_per_bag,
-            products(name)
+            cost_per_bag
           `
           )
+          .eq("company_id", companyId)
           .order("production_date", { ascending: false })
           .limit(50),
       ]);
@@ -524,7 +526,23 @@ export default function ProductionPage() {
     if (productionResult.error) {
       console.log("Production:", productionResult.error.message);
     } else {
-      setProductions((productionResult.data as Production[]) || []);
+      const productList = productsResult.data || [];
+      const normalizedProductions = ((productionResult.data as Production[]) || []).map(
+        (production) => ({
+          ...production,
+          products: production.product_id
+            ? [
+                {
+                  name:
+                    productList.find(
+                      (product) => product.id === production.product_id
+                    )?.name || "",
+                },
+              ]
+            : [],
+        })
+      );
+      setProductions(normalizedProductions);
     }
 
     setLoading(false);
@@ -1776,6 +1794,14 @@ export default function ProductionPage() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
 
 
 
