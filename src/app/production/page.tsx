@@ -16,6 +16,7 @@ type Material = {
   name: string;
   unit: string;
   purchase_rate: number;
+  current_stock: number;
 };
 
 type RecipeItem = {
@@ -200,7 +201,7 @@ export default function ProductionPage() {
         supplier_name: newMaterialVendor.trim() || null,
         active: true,
       })
-      .select("id, name, unit, purchase_rate")
+      .select("id, name, unit, purchase_rate, current_stock")
       .single();
 
     if (error) {
@@ -259,6 +260,64 @@ export default function ProductionPage() {
     );
   }
 
+  async function openRecipeEditor() {
+    if (!productId) {
+      alert("Pehle Product select karo");
+      return;
+    }
+
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company nahi mili");
+      return;
+    }
+
+    const { data: recipeData, error: recipeError } = await supabase
+      .from("recipes")
+      .select("id, product_id, name, quantity_kg")
+      .eq("product_id", productId)
+      .eq("company_id", companyId)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (recipeError) {
+      alert("Recipe load error: " + recipeError.message);
+      return;
+    }
+
+    if (!recipeData) {
+      setRecipe(null);
+      setRecipeName(`${selectedProduct?.name || "Product"} Recipe`);
+      setRecipeBatchKg(String(selectedProduct?.bag_size_kg || ""));
+      setRecipeRows([]);
+      setShowRecipeEditor(true);
+      return;
+    }
+
+    const { data: itemData, error: itemError } = await supabase
+      .from("recipe_items")
+      .select("id, raw_material_id, quantity_kg")
+      .eq("recipe_id", recipeData.id)
+      .eq("company_id", companyId)
+      .order("created_at");
+
+    if (itemError) {
+      alert("Recipe materials load error: " + itemError.message);
+      return;
+    }
+
+    setRecipe(recipeData);
+    setRecipeName(recipeData.name || "");
+    setRecipeBatchKg(String(recipeData.quantity_kg || ""));
+    setRecipeRows(
+      (itemData || []).map((item) => ({
+        raw_material_id: item.raw_material_id,
+        quantity_kg: String(item.quantity_kg || ""),
+      }))
+    );
+    setShowRecipeEditor(true);
+  }
   async function saveRecipe() {
     const companyId = await getCurrentCompanyId();
 
@@ -422,7 +481,7 @@ export default function ProductionPage() {
 
         supabase
           .from("raw_materials")
-          .select("id, name, unit, purchase_rate")
+          .select("id, name, unit, purchase_rate, current_stock")
           .eq("company_id", companyId)
           .eq("active", true)
           .order("name"),
@@ -1172,14 +1231,6 @@ export default function ProductionPage() {
                   >
                     + Add Raw Material
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowNewMaterial(true)}
-                    className="rounded-lg border border-blue-600 px-4 py-2 font-semibold text-blue-600"
-                  >
-                    + New Material
-                  </button>
                 </div>
               </div>
             ) : (
@@ -1218,7 +1269,7 @@ export default function ProductionPage() {
                               key={materialItem.id}
                               value={materialItem.id}
                             >
-                              {materialItem.name}
+                              {materialItem.name} - Stock: {Number(materialItem.current_stock || 0).toFixed(2)} {materialItem.unit} - {String.fromCharCode(8377)}{Number(materialItem.purchase_rate || 0).toFixed(2)}/KG
                             </option>
                           ))}
                         </select>
@@ -1301,13 +1352,6 @@ export default function ProductionPage() {
             </div>
 
             <div className="flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowNewMaterial(true)}
-                className="rounded-lg border border-blue-600 px-5 py-3 font-semibold text-blue-600 hover:bg-blue-50"
-              >
-                + New Material
-              </button>
 
               <button
                 type="button"
@@ -1378,12 +1422,7 @@ export default function ProductionPage() {
                 {productId && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setRecipeName("");
-                      setRecipeBatchKg(String(selectedProduct?.bag_size_kg || ""));
-                      setRecipeRows([]);
-                      setShowRecipeEditor(true);
-                    }}
+                    onClick={openRecipeEditor}
                     className="mt-2 rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
                   >
                     + Create / Edit Recipe
@@ -1737,3 +1776,11 @@ export default function ProductionPage() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
