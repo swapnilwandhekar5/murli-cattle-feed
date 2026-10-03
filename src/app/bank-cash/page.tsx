@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type Account = {
   id: string;
@@ -46,15 +47,33 @@ export default function BankCashPage() {
   const [loading, setLoading] = useState(false);
 
   async function loadData() {
-    const { data: accountData } = await supabase
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      setAccounts([]);
+      setTransactions([]);
+      return;
+    }
+
+    const { data: accountData, error: accountError } = await supabase
       .from("bank_accounts")
       .select("*")
+      .eq("company_id", companyId)
       .order("created_at", { ascending: false });
 
-    const { data: transactionData } = await supabase
+    if (accountError) {
+      console.error("Bank accounts load error:", accountError);
+    }
+
+    const { data: transactionData, error: transactionError } = await supabase
       .from("bank_transactions")
       .select("*")
+      .eq("company_id", companyId)
       .order("transaction_date", { ascending: false });
+
+    if (transactionError) {
+      console.error("Bank transactions load error:", transactionError);
+    }
 
     setAccounts(accountData || []);
     setTransactions(transactionData || []);
@@ -69,6 +88,12 @@ export default function BankCashPage() {
   }, []);
 
   async function addAccount() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found. Please login again.");
+      return;
+    }
     if (!accountName.trim()) {
       alert("Account name required.");
       return;
@@ -77,6 +102,7 @@ export default function BankCashPage() {
     const opening = Number(openingBalance || 0);
 
     const { error } = await supabase.from("bank_accounts").insert({
+      company_id: companyId,
       account_name: accountName.trim(),
       bank_name: bankName.trim() || null,
       account_number: accountNumber.trim() || null,
@@ -101,6 +127,12 @@ export default function BankCashPage() {
   }
 
   async function addTransaction() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found. Please login again.");
+      return;
+    }
     if (!selectedAccount) {
       alert("Please select an account.");
       return;
@@ -141,6 +173,7 @@ export default function BankCashPage() {
     const { data: transaction, error: transactionError } = await supabase
       .from("bank_transactions")
       .insert({
+        company_id: companyId,
         bank_account_id: selectedAccount,
         transaction_date: transactionDate,
         transaction_type: transactionType,
@@ -163,13 +196,15 @@ export default function BankCashPage() {
       .update({
         current_balance: newBalance,
       })
-      .eq("id", selectedAccount);
+      .eq("id", selectedAccount)
+      .eq("company_id", companyId);
 
     if (balanceError) {
       await supabase
         .from("bank_transactions")
         .delete()
-        .eq("id", transaction.id);
+        .eq("id", transaction.id)
+        .eq("company_id", companyId);
 
       alert("Balance update error: " + balanceError.message);
       setLoading(false);
@@ -457,3 +492,8 @@ export default function BankCashPage() {
     </main>
   );
 }
+
+
+
+
+
