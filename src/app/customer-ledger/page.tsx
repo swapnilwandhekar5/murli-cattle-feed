@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type Customer = {
   id: string;
@@ -26,9 +27,17 @@ export default function CustomerLedgerPage() {
   const [loading, setLoading] = useState(false);
 
   async function loadCustomers() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("customers")
       .select("id,name")
+      .eq("company_id", companyId)
       .order("name");
 
     if (error) {
@@ -45,6 +54,13 @@ export default function CustomerLedgerPage() {
       return;
     }
 
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      setEntries([]);
+      return;
+    }
+
     setLoading(true);
 
     const { data, error } = await supabase
@@ -53,6 +69,7 @@ export default function CustomerLedgerPage() {
         "id,customer_id,transaction_date,transaction_type,reference_id,description,debit,credit"
       )
       .eq("customer_id", customerId)
+      .eq("company_id", companyId)
       .order("transaction_date", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -65,7 +82,6 @@ export default function CustomerLedgerPage() {
 
     setLoading(false);
   }
-
   useEffect(() => {
     loadCustomers();
   }, []);
@@ -243,3 +259,4 @@ export default function CustomerLedgerPage() {
     </main>
   );
 }
+

@@ -1,9 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Save, Settings as SettingsIcon } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
-const STORAGE_KEY = "murli_company_settings";
+const STORAGE_KEY = "company_invoice_settings";
 
 type Settings = {
   companyName: string;
@@ -17,7 +19,7 @@ type Settings = {
 };
 
 const defaultSettings: Settings = {
-  companyName: "MURLI Cattle Feed",
+  companyName: "",
   address: "",
   phone: "",
   email: "",
@@ -30,21 +32,60 @@ const defaultSettings: Settings = {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    try {
-      const savedSettings = localStorage.getItem(STORAGE_KEY);
-
-      if (savedSettings) {
-        setSettings({
-          ...defaultSettings,
-          ...JSON.parse(savedSettings),
-        });
-      }
-    } catch (error) {
-      console.error("Settings load error:", error);
-    }
+    loadSettings();
   }, []);
+
+  async function loadSettings() {
+    setLoading(true);
+
+    try {
+      const companyId = await getCurrentCompanyId();
+
+      if (!companyId) {
+        alert("Company not found.");
+        return;
+      }
+
+      const { data: company, error } = await supabase
+        .from("companies")
+        .select("name,address,phone,email,gst_number")
+        .eq("id", companyId)
+        .maybeSingle();
+
+      if (error) {
+        alert("Company settings load error: " + error.message);
+        return;
+      }
+
+      let localSettings: Partial<Settings> = {};
+
+      try {
+        const savedSettings = localStorage.getItem(STORAGE_KEY);
+
+        if (savedSettings) {
+          localSettings = JSON.parse(savedSettings);
+        }
+      } catch (error) {
+        console.error("Local settings load error:", error);
+      }
+
+      setSettings({
+        ...defaultSettings,
+        ...localSettings,
+        companyName: company?.name || "",
+        address: company?.address || "",
+        phone: company?.phone || "",
+        email: company?.email || "",
+        gstNumber: company?.gst_number || "",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function updateField(field: keyof Settings, value: string) {
     setSettings((current) => ({
@@ -55,15 +96,62 @@ export default function SettingsPage() {
     setSaved(false);
   }
 
-  function saveSettings(e: React.FormEvent) {
+  async function saveSettings(e: React.FormEvent) {
     e.preventDefault();
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    setSaved(true);
+    setSaving(true);
+    setSaved(false);
 
-    setTimeout(() => {
-      setSaved(false);
-    }, 3000);
+    try {
+      const companyId = await getCurrentCompanyId();
+
+      if (!companyId) {
+        alert("Company not found.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("companies")
+        .update({
+          name: settings.companyName.trim(),
+          address: settings.address.trim() || null,
+          phone: settings.phone.trim() || null,
+          email: settings.email.trim() || null,
+          gst_number: settings.gstNumber.trim() || null,
+        })
+        .eq("id", companyId);
+
+      if (error) {
+        alert("Company settings save error: " + error.message);
+        return;
+      }
+
+      const localSettings = {
+        invoicePrefix: settings.invoicePrefix,
+        defaultBagSize: settings.defaultBagSize,
+        currency: settings.currency,
+      };
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(localSettings));
+
+      setSaved(true);
+
+      setTimeout(() => {
+        setSaved(false);
+      }, 3000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="mx-auto max-w-5xl rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+          Loading company settings...
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -80,7 +168,7 @@ export default function SettingsPage() {
           </h1>
 
           <p className="mt-1 text-sm text-slate-500">
-            Manage company and invoice settings for MURLI Cattle Feed.
+            Manage your company and invoice settings.
           </p>
         </div>
 
@@ -92,7 +180,7 @@ export default function SettingsPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                These details can be used later on invoices and reports.
+                These details belong to the currently logged-in business.
               </p>
             </div>
 
@@ -101,7 +189,7 @@ export default function SettingsPage() {
                 label="Company Name"
                 value={settings.companyName}
                 onChange={(value) => updateField("companyName", value)}
-                placeholder="MURLI Cattle Feed"
+                placeholder="Enter company name"
               />
 
               <Field
@@ -153,7 +241,7 @@ export default function SettingsPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Default values used by the software.
+                Default values used by this business.
               </p>
             </div>
 
@@ -189,9 +277,9 @@ export default function SettingsPage() {
                   }
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
                 >
-                  <option value="INR">INR - ₹ Indian Rupee</option>
-                  <option value="USD">USD - $ US Dollar</option>
-                  <option value="AED">AED - د.إ UAE Dirham</option>
+                  <option value="INR">INR - Indian Rupee</option>
+                  <option value="USD">USD - US Dollar</option>
+                  <option value="AED">AED - UAE Dirham</option>
                 </select>
               </div>
             </div>
@@ -200,16 +288,17 @@ export default function SettingsPage() {
           <div className="flex flex-col items-stretch justify-end gap-3 sm:flex-row sm:items-center">
             {saved && (
               <div className="rounded-xl bg-green-50 px-4 py-3 text-sm font-bold text-green-700">
-                ✓ Settings saved successfully
+                Settings saved successfully
               </div>
             )}
 
             <button
               type="submit"
-              className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-slate-800"
+              disabled={saving}
+              className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Save size={18} />
-              Save Settings
+              {saving ? "Saving..." : "Save Settings"}
             </button>
           </div>
         </form>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 import { CreditCard, IndianRupee, Save } from "lucide-react";
 
 type Supplier = {
@@ -46,20 +47,30 @@ export default function SupplierPaymentsPage() {
   const [loading, setLoading] = useState(false);
 
   async function loadData() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found.");
+      return;
+    }
+
     const [{ data: supplierData }, { data: ledgerData }, { data: paymentData }] =
       await Promise.all([
         supabase
           .from("suppliers")
           .select("id,name")
+          .eq("company_id", companyId)
           .order("name"),
         supabase
           .from("party_ledger")
           .select("*")
+          .eq("company_id", companyId)
           .not("supplier_id", "is", null)
           .order("transaction_date", { ascending: false }),
         supabase
           .from("payments")
           .select("*")
+          .eq("company_id", companyId)
           .not("supplier_id", "is", null)
           .order("payment_date", { ascending: false }),
       ]);
@@ -107,9 +118,18 @@ export default function SupplierPaymentsPage() {
 
     setLoading(true);
 
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found.");
+      setLoading(false);
+      return;
+    }
+
     const { data: payment, error: paymentError } = await supabase
       .from("payments")
       .insert({
+        company_id: companyId,
         supplier_id: supplierId,
         payment_date: paymentDate,
         amount: paymentAmount,
@@ -129,6 +149,7 @@ export default function SupplierPaymentsPage() {
     const { error: ledgerError } = await supabase
       .from("party_ledger")
       .insert({
+        company_id: companyId,
         supplier_id: supplierId,
         transaction_date: paymentDate,
         transaction_type: "PAYMENT",
@@ -139,7 +160,7 @@ export default function SupplierPaymentsPage() {
       });
 
     if (ledgerError) {
-      await supabase.from("payments").delete().eq("id", payment.id);
+      await supabase.from("payments").delete().eq("id", payment.id).eq("company_id", companyId);
 
       alert("Supplier ledger error: " + ledgerError.message);
       setLoading(false);
@@ -387,3 +408,8 @@ export default function SupplierPaymentsPage() {
     </div>
   );
 }
+
+
+
+
+

@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type Customer = {
   id: string;
@@ -36,9 +37,16 @@ export default function CustomerPaymentsPage() {
   const [saving, setSaving] = useState(false);
 
   async function loadCustomers() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found.");
+      return;
+    }
     const { data, error } = await supabase
       .from("customers")
       .select("id,name,phone")
+      .eq("company_id", companyId)
       .order("name");
 
     if (error) {
@@ -50,6 +58,13 @@ export default function CustomerPaymentsPage() {
   }
 
   async function loadCustomerLedger(id: string) {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      setEntries([]);
+      setLoading(false);
+      return;
+    }
     if (!id) {
       setEntries([]);
       return;
@@ -63,6 +78,7 @@ export default function CustomerPaymentsPage() {
         "id,customer_id,transaction_date,transaction_type,description,debit,credit"
       )
       .eq("customer_id", id)
+      .eq("company_id", companyId)
       .order("transaction_date", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -111,9 +127,7 @@ export default function CustomerPaymentsPage() {
 
     if (paymentAmount > outstanding) {
       alert(
-        `Payment outstanding due se zyada nahi ho sakta.\nOutstanding: ₹${outstanding.toFixed(
-          2
-        )}`
+        "Payment outstanding due se zyada nahi ho sakta.\nOutstanding: ₹" + outstanding.toFixed(2)
       );
       return;
     }
@@ -126,11 +140,17 @@ export default function CustomerPaymentsPage() {
     setSaving(true);
 
     try {
-      // Save payment record
+      const companyId = await getCurrentCompanyId();
+
+      if (!companyId) {
+        throw new Error("Company not found.");
+      }
+
       const { data: payment, error: paymentError } =
         await supabase
           .from("payments")
           .insert({
+            company_id: companyId,
             customer_id: customerId,
             payment_date: paymentDate,
             amount: paymentAmount,
@@ -148,27 +168,27 @@ export default function CustomerPaymentsPage() {
         );
       }
 
-      // Add payment to customer ledger as credit
       const { error: ledgerError } = await supabase
         .from("party_ledger")
         .insert({
+          company_id: companyId,
           customer_id: customerId,
           transaction_date: paymentDate,
           transaction_type: "PAYMENT",
           reference_id: payment.id,
           description:
             notes.trim() ||
-            `Customer Payment - ${paymentMode}`,
+            "Customer Payment - " + customerId,
           debit: 0,
           credit: paymentAmount,
         });
 
       if (ledgerError) {
-        // Remove payment record if ledger insert fails
         await supabase
           .from("payments")
           .delete()
-          .eq("id", payment.id);
+          .eq("id", payment.id)
+          .eq("company_id", companyId);
 
         throw new Error(
           "Payment ledger error: " + ledgerError.message
@@ -176,11 +196,7 @@ export default function CustomerPaymentsPage() {
       }
 
       alert(
-        `Payment saved successfully ✅\n\nAmount: ₹${paymentAmount.toFixed(
-          2
-        )}\nMode: ${paymentMode}\nRemaining Due: ₹${(
-          outstanding - paymentAmount
-        ).toFixed(2)}`
+        "Payment saved successfully ✅\n\nAmount: ₹" + paymentAmount.toFixed(2) + "\nMode: " + paymentMode + "\nRemaining Due: ₹" + Math.max(0, outstanding - paymentAmount).toFixed(2)
       );
 
       setAmount("");
@@ -198,7 +214,6 @@ export default function CustomerPaymentsPage() {
       setSaving(false);
     }
   }
-
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl">
@@ -254,7 +269,7 @@ export default function CustomerPaymentsPage() {
 
             <div>
               <label className="mb-1 block text-sm font-medium">
-                Payment Amount (₹)
+                Payment Amount (â‚¹)
               </label>
 
               <input
@@ -323,7 +338,7 @@ export default function CustomerPaymentsPage() {
               </div>
 
               <div className="text-xl font-bold">
-                ₹{totalDebit.toFixed(2)}
+                â‚¹{totalDebit.toFixed(2)}
               </div>
             </div>
 
@@ -333,7 +348,7 @@ export default function CustomerPaymentsPage() {
               </div>
 
               <div className="text-xl font-bold text-green-600">
-                ₹{totalCredit.toFixed(2)}
+                â‚¹{totalCredit.toFixed(2)}
               </div>
             </div>
 
@@ -343,7 +358,7 @@ export default function CustomerPaymentsPage() {
               </div>
 
               <div className="text-xl font-bold text-red-600">
-                ₹{outstanding.toFixed(2)}
+                â‚¹{outstanding.toFixed(2)}
               </div>
             </div>
           </div>
@@ -401,14 +416,14 @@ export default function CustomerPaymentsPage() {
                         </td>
 
                         <td className="p-3">
-                          ₹
+                          â‚¹
                           {Number(entry.debit || 0).toFixed(
                             2
                           )}
                         </td>
 
                         <td className="p-3 text-green-600">
-                          ₹
+                          â‚¹
                           {Number(entry.credit || 0).toFixed(
                             2
                           )}
@@ -425,3 +440,13 @@ export default function CustomerPaymentsPage() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+

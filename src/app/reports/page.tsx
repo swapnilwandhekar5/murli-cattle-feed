@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 import {
   BarChart3,
   CalendarDays,
@@ -85,6 +86,14 @@ export default function ReportsPage() {
   async function loadReports() {
     setLoading(true);
 
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found.");
+      setLoading(false);
+      return;
+    }
+
     const [
       salesResult,
       productionResult,
@@ -97,6 +106,7 @@ export default function ReportsPage() {
       supabase
         .from("sales")
         .select("id,sale_date,total_amount,paid_amount,due_amount")
+        .eq("company_id", companyId)
         .order("sale_date", { ascending: false }),
 
       supabase
@@ -104,29 +114,35 @@ export default function ReportsPage() {
         .select(
           "id,production_date,bags_produced,total_quantity_kg,total_production_cost"
         )
+        .eq("company_id", companyId)
         .order("production_date", { ascending: false }),
 
       supabase
         .from("raw_materials")
         .select("id,name,current_stock,minimum_stock,purchase_rate")
+        .eq("company_id", companyId)
         .order("name"),
 
       supabase
         .from("finished_goods_stock")
-        .select("id,product_id,quantity_bags,quantity_kg,batch_number"),
+        .select("id,product_id,quantity_bags,quantity_kg,batch_number")
+        .eq("company_id", companyId),
 
       supabase
         .from("products")
         .select("id,name")
+        .eq("company_id", companyId)
         .order("name"),
 
       supabase
         .from("party_ledger")
-        .select("id,customer_id,supplier_id,debit,credit"),
+        .select("id,customer_id,supplier_id,debit,credit")
+        .eq("company_id", companyId),
 
       supabase
         .from("bank_accounts")
         .select("id,account_name,bank_name,current_balance,account_type")
+        .eq("company_id", companyId)
         .order("account_name"),
     ]);
 
@@ -660,3 +676,7 @@ function SmallCard({
     </div>
   );
 }
+
+
+
+

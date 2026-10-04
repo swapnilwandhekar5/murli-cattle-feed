@@ -1,11 +1,68 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
+
+type Company = {
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  gst_number: string | null;
+};
 
 export default function BillingPage() {
   const [customer, setCustomer] = useState("");
   const [invoiceNo, setInvoiceNo] = useState("INV-0001");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  const [company, setCompany] = useState<Company | null>(null);
+  const [loadingCompany, setLoadingCompany] = useState(true);
+
+  useEffect(() => {
+    loadCompany();
+  }, []);
+
+  async function loadCompany() {
+    setLoadingCompany(true);
+
+    try {
+      const companyId = await getCurrentCompanyId();
+
+      if (!companyId) {
+        alert("Company not found.");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("companies")
+        .select("name,address,phone,email,gst_number")
+        .eq("id", companyId)
+        .maybeSingle();
+
+      if (error) {
+        alert("Company details load error: " + error.message);
+        return;
+      }
+
+      setCompany(data);
+    } finally {
+      setLoadingCompany(false);
+    }
+  }
+
+  const companyName =
+    company?.name?.trim() || "Company Name";
+
+  const companyAddress =
+    company?.address?.trim() || "Company Address";
+
+  const companyPhone =
+    company?.phone?.trim() || "Phone Number";
+
+  const companyGst =
+    company?.gst_number?.trim() || "GSTIN";
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 md:p-6">
@@ -20,29 +77,29 @@ export default function BillingPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 no-print">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold"
-              >
-                🖨️ Print Invoice
-              </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold"
+            >
+              Print Invoice
+            </button>
 
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white"
-              >
-                📄 Save PDF
-              </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Save PDF
+            </button>
 
-              <button
-                type="button"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Save Invoice
-              </button>
-            </div>
+            <button
+              type="button"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Save Invoice
+            </button>
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
@@ -52,13 +109,15 @@ export default function BillingPage() {
 
               <div className="md:col-span-2">
                 <h2 className="text-xl font-bold text-slate-900">
-                  YOUR COMPANY NAME
+                  {loadingCompany ? "Loading company..." : companyName}
                 </h2>
+
                 <p className="mt-1 text-sm text-slate-500">
-                  Address, City, Maharashtra
+                  {loadingCompany ? "Loading address..." : companyAddress}
                 </p>
+
                 <p className="text-sm text-slate-500">
-                  Mobile: +91 XXXXX XXXXX | GSTIN: XXXXXXXX
+                  Mobile: {companyPhone} | GSTIN: {companyGst}
                 </p>
               </div>
 
@@ -67,6 +126,7 @@ export default function BillingPage() {
 
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <span className="text-slate-500">Invoice No.</span>
+
                   <input
                     value={invoiceNo}
                     onChange={(e) => setInvoiceNo(e.target.value)}
@@ -74,6 +134,7 @@ export default function BillingPage() {
                   />
 
                   <span className="text-slate-500">Invoice Date</span>
+
                   <input
                     type="date"
                     value={date}
@@ -105,6 +166,7 @@ export default function BillingPage() {
                   placeholder="Customer GSTIN"
                   className="rounded-lg border px-3 py-2 text-sm"
                 />
+
                 <input
                   placeholder="Mobile Number"
                   className="rounded-lg border px-3 py-2 text-sm"
@@ -157,18 +219,21 @@ export default function BillingPage() {
               <tbody>
                 <tr className="border-b">
                   <td className="px-3 py-4">1</td>
+
                   <td className="px-3 py-4">
                     <input
                       placeholder="Select Product"
                       className="w-full rounded border px-2 py-2"
                     />
                   </td>
+
                   <td className="px-3 py-4">
                     <input
                       placeholder="HSN"
                       className="w-20 rounded border px-2 py-2"
                     />
                   </td>
+
                   <td className="px-3 py-4">
                     <input
                       type="number"
@@ -176,6 +241,7 @@ export default function BillingPage() {
                       className="w-20 rounded border px-2 py-2 text-right"
                     />
                   </td>
+
                   <td className="px-3 py-4">
                     <input
                       type="number"
@@ -183,6 +249,7 @@ export default function BillingPage() {
                       className="w-24 rounded border px-2 py-2 text-right"
                     />
                   </td>
+
                   <td className="px-3 py-4">
                     <input
                       type="number"
@@ -190,6 +257,7 @@ export default function BillingPage() {
                       className="w-24 rounded border px-2 py-2 text-right"
                     />
                   </td>
+
                   <td className="px-3 py-4 text-right">₹0.00</td>
                   <td className="px-3 py-4 text-right">₹0.00</td>
                   <td className="px-3 py-4 text-right font-bold">₹0.00</td>
@@ -260,7 +328,8 @@ export default function BillingPage() {
           </div>
 
           <div className="border-t bg-slate-50 p-5 text-right text-sm text-slate-500">
-            For YOUR COMPANY NAME
+            For {companyName}
+
             <div className="mt-8 font-semibold text-slate-800">
               Authorized Signatory
             </div>
@@ -268,23 +337,23 @@ export default function BillingPage() {
 
         </div>
       </div>
-    
-    <style jsx global>{`
-      @media print {
-        .no-print {
-          display: none !important;
-        }
 
-        body {
-          background: white !important;
-        }
+      <style jsx global>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
 
-        @page {
-          size: A4;
-          margin: 10mm;
+          body {
+            background: white !important;
+          }
+
+          @page {
+            size: A4;
+            margin: 10mm;
+          }
         }
-      }
-    `}</style>
+      `}</style>
     </main>
   );
 }

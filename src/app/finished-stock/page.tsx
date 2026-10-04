@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentCompanyId } from "@/lib/company";
 
 type FinishedStock = {
   id: string;
@@ -21,6 +22,15 @@ export default function FinishedStockPage() {
   async function loadStock() {
     setLoading(true);
 
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Company not found.");
+      setStock([]);
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("finished_goods_stock")
       .select(`
@@ -36,6 +46,7 @@ export default function FinishedStockPage() {
           code
         )
       `)
+      .eq("company_id", companyId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -174,3 +185,4 @@ export default function FinishedStockPage() {
     </main>
   );
 }
+
