@@ -120,6 +120,7 @@ export default function DashboardPage() {
   const [finishedStock, setFinishedStock] = useState<FinishedStock[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [companyName, setCompanyName] = useState("Business");
 
   async function loadDashboard() {
     try {
@@ -145,6 +146,8 @@ export default function DashboardPage() {
       }
 
       const companyId = member.company_id;
+      const { data: company } = await supabase.from("companies").select("name").eq("id", companyId).single();
+      setCompanyName(company?.name || "Business");
 
       const [
         salesResult,
@@ -317,7 +320,7 @@ export default function DashboardPage() {
                 <Factory size={21} />
               </div>
               <span className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
-                MURLI
+                {companyName}
               </span>
             </div>
 
