@@ -300,6 +300,7 @@ export default function SalesPage() {
         .from("sale_items")
         .insert({
           sale_id: sale.id,
+          company_id: companyId,
           product_id: productId,
           quantity_bags: bagQty,
           rate_per_bag: rate,
@@ -335,7 +336,7 @@ export default function SalesPage() {
             quantity_bags: newBags,
             quantity_kg: newKg,
           })
-          .eq("id", stock.id);
+          .eq("id", stock.id).eq("company_id", companyId);
 
         if (updateStockError) {
           throw new Error(
