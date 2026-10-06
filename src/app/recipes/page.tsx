@@ -45,10 +45,14 @@ export default function RecipesPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [companyName, setCompanyName] = useState("Business");
 
   async function loadData() {
     const companyId = await getCurrentCompanyId();
     if (!companyId) return;
+
+    const { data: company } = await supabase.from("companies").select("name").eq("id", companyId).single();
+    setCompanyName(company?.name || "Business");
     setLoading(true);
 
     const [productsResult, materialsResult, recipesResult] =
@@ -268,7 +272,7 @@ export default function RecipesPage() {
 
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-green-700">
-            MURLI
+            {companyName}
           </h1>
 
           <p className="text-slate-500">

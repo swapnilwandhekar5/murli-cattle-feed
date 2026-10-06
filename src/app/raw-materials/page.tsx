@@ -20,6 +20,7 @@ export default function RawMaterialsPage() {
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [companyName, setCompanyName] = useState("Business");
 
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -32,6 +33,9 @@ export default function RawMaterialsPage() {
   async function loadMaterials() {
     const companyId = await getCurrentCompanyId();
     if (!companyId) return;
+
+    const { data: company } = await supabase.from("companies").select("name").eq("id", companyId).single();
+    setCompanyName(company?.name || "Business");
     setLoading(true);
 
     const { data, error } = await supabase
@@ -109,7 +113,7 @@ export default function RawMaterialsPage() {
 
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-green-700">
-            MURLI
+            {companyName}
           </h1>
           <p className="text-slate-500">
             Raw Material Management

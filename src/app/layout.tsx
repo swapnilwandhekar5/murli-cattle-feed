@@ -3,8 +3,8 @@ import "./globals.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "MURLI Cattle Feed",
-  description: "MURLI Cattle Feed Manufacturing Management System",
+  title: "FEEDORA - Smart Feed Business Management",
+  description: "Smart Feed Business Management System",
 };
 
 export default function RootLayout({

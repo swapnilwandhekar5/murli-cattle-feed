@@ -29,7 +29,7 @@ export default function Home() {
         <div className="mb-4 text-5xl">🐄</div>
 
         <h1 className="text-4xl font-bold text-green-700">
-          MURLI
+          FEEDORA
         </h1>
 
         <p className="mt-2 text-slate-500">
