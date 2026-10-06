@@ -7,6 +7,7 @@ import { getCurrentCompanyId } from "@/lib/company";
 type Customer = {
   id: string;
   name: string;
+  opening_balance?: number | null;
 };
 
 type LedgerEntry = {
@@ -36,7 +37,7 @@ export default function CustomerLedgerPage() {
 
     const { data, error } = await supabase
       .from("customers")
-      .select("id,name")
+      .select("id,name,opening_balance")
       .eq("company_id", companyId)
       .order("name");
 
@@ -100,13 +101,15 @@ export default function CustomerLedgerPage() {
     0
   );
 
-  const outstanding = totalDebit - totalCredit;
-
   const selectedCustomerData = customers.find(
     (customer) => customer.id === selectedCustomer
   );
 
-  let runningBalance = 0;
+  const openingBalance = Number(selectedCustomerData?.opening_balance || 0);
+
+  const outstanding = openingBalance + totalDebit - totalCredit;
+
+  let runningBalance = openingBalance;
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -133,7 +136,6 @@ export default function CustomerLedgerPage() {
 
             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
-                {customer.name}
                 {customer.name}
               </option>
             ))}
@@ -187,7 +189,7 @@ export default function CustomerLedgerPage() {
 
               {loading ? (
                 <p>Loading ledger...</p>
-              ) : entries.length === 0 ? (
+              ) : entries.length === 0 && openingBalance === 0 ? (
                 <p className="text-gray-500">
                   Is customer ka ledger abhi empty hai.
                 </p>
@@ -206,6 +208,16 @@ export default function CustomerLedgerPage() {
                     </thead>
 
                     <tbody>
+                      {openingBalance > 0 && (
+                        <tr className="border-b bg-gray-50">
+                          <td className="p-3">-</td>
+                          <td className="p-3 font-medium">OPENING</td>
+                          <td className="p-3">Opening Balance</td>
+                          <td className="p-3">₹{openingBalance.toFixed(2)}</td>
+                          <td className="p-3 text-green-600">₹0.00</td>
+                          <td className="p-3 font-semibold text-red-600">₹{openingBalance.toFixed(2)}</td>
+                        </tr>
+                      )}
                       {entries.map((entry) => {
                         runningBalance +=
                           Number(entry.debit || 0) -
