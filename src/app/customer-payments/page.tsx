@@ -8,6 +8,7 @@ type Customer = {
   id: string;
   name: string;
   phone: string | null;
+  opening_balance?: number | null;
 };
 
 type LedgerEntry = {
@@ -45,7 +46,7 @@ export default function CustomerPaymentsPage() {
     }
     const { data, error } = await supabase
       .from("customers")
-      .select("id,name,phone")
+      .select("id,name,phone,opening_balance")
       .eq("company_id", companyId)
       .order("name");
 
@@ -110,7 +111,9 @@ export default function CustomerPaymentsPage() {
     0
   );
 
-  const outstanding = Math.max(0, totalDebit - totalCredit);
+  const selectedCustomer = customers.find((customer) => customer.id === customerId);
+  const openingBalance = Number(selectedCustomer?.opening_balance || 0);
+  const outstanding = Math.max(0, openingBalance + totalDebit - totalCredit);
 
   async function savePayment() {
     if (!customerId) {
