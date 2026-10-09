@@ -110,9 +110,12 @@ function productName(
   return products.name;
 }
 
+async function fetchAllRows<T>(query: any, pageSize = 500): Promise<T[]> { const rows: T[] = []; for (let from = 0; ; from += pageSize) { const { data, error } = await query.range(from, from + pageSize - 1); if (error) throw error; const page = (data ?? []) as T[]; rows.push(...page); if (page.length < pageSize) break; } return rows; }
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
 
   const [sales, setSales] = useState<Sale[]>([]);
   const [production, setProduction] = useState<Production[]>([]);
@@ -124,6 +127,7 @@ export default function DashboardPage() {
 
   async function loadDashboard() {
     try {
+      setDashboardError("");
       setRefreshing(true);
 
       const {
@@ -157,23 +161,21 @@ export default function DashboardPage() {
         accountsResult,
         paymentsResult,
       ] = await Promise.all([
-        supabase
-          .from("sales")
-          .select(
-            "id, invoice_number, sale_date, total_amount, paid_amount, due_amount"
-          )
-          .eq("company_id", companyId)
-          .order("sale_date", { ascending: false })
-          .limit(100),
+        fetchAllRows<Sale>(
+          supabase
+            .from("sales")
+            .select("id, invoice_number, sale_date, total_amount, paid_amount, due_amount")
+            .eq("company_id", companyId)
+            .order("sale_date", { ascending: false })
+        ),
 
-        supabase
-          .from("production_batches")
-          .select(
-            "id, batch_number, production_date, bags_produced, total_production_cost, cost_per_bag"
-          )
-          .eq("company_id", companyId)
-          .order("production_date", { ascending: false })
-          .limit(100),
+        fetchAllRows<Production>(
+          supabase
+            .from("production_batches")
+            .select("id, batch_number, production_date, bags_produced, total_production_cost, cost_per_bag")
+            .eq("company_id", companyId)
+            .order("production_date", { ascending: false })
+        ),
 
         supabase
           .from("raw_materials")
@@ -201,12 +203,19 @@ export default function DashboardPage() {
           .limit(10),
       ]);
 
-      if (!salesResult.error) setSales(salesResult.data ?? []);
-      if (!productionResult.error) setProduction(productionResult.data ?? []);
-      if (!rawResult.error) setRawMaterials(rawResult.data ?? []);
-      if (!finishedResult.error) setFinishedStock(finishedResult.data ?? []);
-      if (!accountsResult.error) setAccounts(accountsResult.data ?? []);
-      if (!paymentsResult.error) setPayments(paymentsResult.data ?? []);
+      setSales(salesResult);
+      setProduction(productionResult);
+      if (rawResult.error) throw rawResult.error;
+      if (finishedResult.error) throw finishedResult.error;
+      if (accountsResult.error) throw accountsResult.error;
+      if (paymentsResult.error) throw paymentsResult.error;
+      setRawMaterials(rawResult.data ?? []);
+      setFinishedStock(finishedResult.data ?? []);
+      setAccounts(accountsResult.data ?? []);
+      setPayments(paymentsResult.data ?? []);
+    } catch (error) {
+      console.error("Dashboard load error:", error);
+      setDashboardError(error instanceof Error ? error.message : "Dashboard data could not be loaded.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -276,21 +285,39 @@ export default function DashboardPage() {
     .filter((item) => item.production_date === today)
     .reduce((sum, item) => sum + Number(item.bags_produced || 0), 0);
 
-  const salesChart: SalesChartRow[] = [...sales]
-    .slice(0, 7)
-    .reverse()
-    .map((item) => ({
-      date: shortDate(item.sale_date),
-      sales: Number(item.total_amount || 0),
-    }));
+  const currentMonth = today.slice(0, 7);
 
-  const productionChart: ProductionChartRow[] = [...production]
-    .slice(0, 7)
-    .reverse()
-    .map((item) => ({
-      date: shortDate(item.production_date),
-      bags: Number(item.bags_produced || 0),
-    }));
+  const monthSales = sales
+    .filter((item) => item.sale_date?.slice(0, 7) === currentMonth)
+    .reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+
+  const monthProduction = production
+    .filter((item) => item.production_date?.slice(0, 7) === currentMonth)
+    .reduce((sum, item) => sum + Number(item.bags_produced || 0), 0);
+
+  const salesChart: SalesChartRow[] = (() => {
+    const daily = new Map<string, number>();
+    sales.forEach((item) => {
+      if (!item.sale_date) return;
+      daily.set(item.sale_date, (daily.get(item.sale_date) || 0) + Number(item.total_amount || 0));
+    });
+    return [...daily.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-7)
+      .map(([date, amount]) => ({ date: shortDate(date), sales: amount }));
+  })();
+
+  const productionChart: ProductionChartRow[] = (() => {
+    const daily = new Map<string, number>();
+    production.forEach((item) => {
+      if (!item.production_date) return;
+      daily.set(item.production_date, (daily.get(item.production_date) || 0) + Number(item.bags_produced || 0));
+    });
+    return [...daily.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-7)
+      .map(([date, bags]) => ({ date: shortDate(date), bags }));
+  })();
 
   if (loading) {
     return (
@@ -345,6 +372,16 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        {dashboardError && (
+          <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="font-bold">Dashboard data could not be fully loaded</div>
+            <p className="mt-1">{dashboardError}</p>
+            <button onClick={loadDashboard} className="mt-2 font-semibold underline">
+              Try again
+            </button>
+          </div>
+        )}
+
         {/* KPI CARDS */}
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
@@ -381,7 +418,7 @@ export default function DashboardPage() {
         </section>
 
         {/* SECOND KPI ROW */}
-        <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <MiniStat
             title="Today's Sales"
             value={money(todaySales)}
@@ -390,8 +427,21 @@ export default function DashboardPage() {
           />
 
           <MiniStat
+            title="This Month Sales"
+            value={money(monthSales)}
+            icon={<TrendingUp size={18} />}
+            positive
+          />
+
+          <MiniStat
             title="Today's Production"
             value={`${todayProduction} Bags`}
+            icon={<Factory size={18} />}
+          />
+
+          <MiniStat
+            title="This Month Production"
+            value={`${monthProduction} Bags`}
             icon={<Factory size={18} />}
           />
 
