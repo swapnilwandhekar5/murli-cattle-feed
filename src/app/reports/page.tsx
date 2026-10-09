@@ -233,6 +233,39 @@ export default function ReportsPage() {
     0
   );
 
+  const monthlyReport = (() => {
+    const months = new Map<
+      string,
+      { sales: number; productionCost: number }
+    >();
+
+    for (const item of filteredSales) {
+      const month = item.sale_date.slice(0, 7);
+      if (!months.has(month)) {
+        months.set(month, { sales: 0, productionCost: 0 });
+      }
+      months.get(month)!.sales += Number(item.total_amount || 0);
+    }
+
+    for (const item of filteredProduction) {
+      const month = item.production_date.slice(0, 7);
+      if (!months.has(month)) {
+        months.set(month, { sales: 0, productionCost: 0 });
+      }
+      months.get(month)!.productionCost += Number(
+        item.total_production_cost || 0
+      );
+    }
+
+    return Array.from(months.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([month, totals]) => ({
+        month,
+        ...totals,
+        indicativeDifference: totals.sales - totals.productionCost,
+      }));
+  })();
+
   const customerOutstanding = ledger
     .filter((entry) => entry.customer_id)
     .reduce(
@@ -534,6 +567,63 @@ export default function ReportsPage() {
                 </div>
               </div>
             </div>
+
+            <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5">
+                <h2 className="text-lg font-extrabold text-slate-900">
+                  Monthly Sales & Cost Report
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Month-wise sales and production cost for the selected date range.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px] text-left">
+                  <thead className="border-b border-slate-100 bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-3 text-xs font-bold text-slate-500">Month</th>
+                      <th className="px-3 py-3 text-right text-xs font-bold text-slate-500">Sales</th>
+                      <th className="px-3 py-3 text-right text-xs font-bold text-slate-500">Production Cost</th>
+                      <th className="px-3 py-3 text-right text-xs font-bold text-slate-500">Indicative Difference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {monthlyReport.map((item) => (
+                      <tr key={item.month}>
+                        <td className="px-3 py-3 text-sm font-bold text-slate-800">
+                          {new Date(
+                            Number(item.month.slice(0, 4)),
+                            Number(item.month.slice(5, 7)) - 1,
+                            1
+                          ).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+                        </td>
+                        <td className="px-3 py-3 text-right text-sm font-bold text-slate-800">
+                          ₹{item.sales.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-3 text-right text-sm font-bold text-slate-800">
+                          ₹{item.productionCost.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className={`px-3 py-3 text-right text-sm font-extrabold ${item.indicativeDifference >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          ₹{item.indicativeDifference.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                    {monthlyReport.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-400">
+                          No sales or production records for the selected period.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                Note: Indicative difference is sales minus total production cost. It is not actual net profit because production cost is not matched to the inventory sold and other operating expenses are excluded.
+              </p>
+            </section>
 
             <div className="mb-6 grid gap-6 lg:grid-cols-2">
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
