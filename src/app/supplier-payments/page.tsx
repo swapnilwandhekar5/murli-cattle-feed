@@ -6,6 +6,7 @@ import { getCurrentCompanyId } from "@/lib/company";
 import { CreditCard, IndianRupee, Save } from "lucide-react";
 
 type Supplier = {
+  opening_balance: number | null;
   id: string;
   name: string;
 };
@@ -44,6 +45,17 @@ export default function SupplierPaymentsPage() {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [bankAccounts, setBankAccounts] = useState<
+    {
+      id: string;
+      account_name: string | null;
+      bank_name: string;
+      current_balance: number | null;
+      account_type: string | null;
+    }[]
+  >([]);
+  const [bankAccountId, setBankAccountId] = useState("");
+
   const [loading, setLoading] = useState(false);
 
   async function loadData() {
@@ -54,11 +66,11 @@ export default function SupplierPaymentsPage() {
       return;
     }
 
-    const [{ data: supplierData }, { data: ledgerData }, { data: paymentData }] =
+    const [{ data: supplierData }, { data: ledgerData }, { data: paymentData }, { data: bankAccountData, error: bankAccountError }] =
       await Promise.all([
         supabase
           .from("suppliers")
-          .select("id,name")
+          .select("id,name,opening_balance")
           .eq("company_id", companyId)
           .order("name"),
         supabase
@@ -73,11 +85,22 @@ export default function SupplierPaymentsPage() {
           .eq("company_id", companyId)
           .not("supplier_id", "is", null)
           .order("payment_date", { ascending: false }),
+        supabase
+          .from("bank_accounts")
+          .select("id,account_name,bank_name,current_balance,account_type")
+          .eq("company_id", companyId)
+          .eq("active", true)
+          .order("account_name"),
       ]);
+
+    if (bankAccountError) {
+      alert("Bank/Cash accounts load error: " + bankAccountError.message);
+    }
 
     setSuppliers(supplierData || []);
     setLedger(ledgerData || []);
     setPayments(paymentData || []);
+    setBankAccounts(bankAccountData || []);
   }
 
   useEffect(() => {
@@ -88,12 +111,22 @@ export default function SupplierPaymentsPage() {
     (entry) => entry.supplier_id === supplierId
   );
 
-  const outstanding = supplierLedger.reduce(
-    (total, entry) =>
-      total +
-      Number(entry.debit || 0) -
-      Number(entry.credit || 0),
-    0
+  const selectedSupplier = suppliers.find(
+    (supplier) => supplier.id === supplierId
+  );
+
+  const openingBalance = Number(selectedSupplier?.opening_balance || 0);
+
+  const outstanding = Math.max(
+    0,
+    openingBalance +
+      supplierLedger.reduce(
+        (total, entry) =>
+          total +
+          Number(entry.debit || 0) -
+          Number(entry.credit || 0),
+        0
+      )
   );
 
   async function savePayment(e: React.FormEvent) {
@@ -116,6 +149,25 @@ export default function SupplierPaymentsPage() {
       return;
     }
 
+    if (!bankAccountId) {
+      alert("Please select Bank / Cash account.");
+      return;
+    }
+
+    const selectedBankAccount = bankAccounts.find(
+      (account) => account.id === bankAccountId
+    );
+
+    if (!selectedBankAccount) {
+      alert("Selected Bank / Cash account not found.");
+      return;
+    }
+
+    if (paymentAmount > Number(selectedBankAccount.current_balance || 0)) {
+      alert("Insufficient Bank / Cash balance.");
+      return;
+    }
+
     setLoading(true);
 
     const companyId = await getCurrentCompanyId();
@@ -134,6 +186,7 @@ export default function SupplierPaymentsPage() {
         payment_date: paymentDate,
         amount: paymentAmount,
         payment_mode: paymentMode,
+        bank_account_id: bankAccountId,
         reference_number: referenceNumber.trim() || null,
         notes: notes.trim() || null,
       })
@@ -142,6 +195,47 @@ export default function SupplierPaymentsPage() {
 
     if (paymentError) {
       alert("Payment save error: " + paymentError.message);
+      setLoading(false);
+      return;
+    }
+
+    const currentBalance = Number(selectedBankAccount.current_balance || 0);
+    const newBalance = currentBalance - paymentAmount;
+
+    const { data: bankTransaction, error: bankTransactionError } = await supabase
+      .from("bank_transactions")
+      .insert({
+        company_id: companyId,
+        bank_account_id: bankAccountId,
+        transaction_date: paymentDate,
+        transaction_type: "MONEY_OUT",
+        amount: paymentAmount,
+        debit: paymentAmount,
+        credit: 0,
+        payment_mode: paymentMode,
+        reference_number: referenceNumber.trim() || null,
+        description: notes.trim() || `Supplier Payment - ${supplierId}`,
+      })
+      .select("id")
+      .single();
+
+    if (bankTransactionError || !bankTransaction) {
+      await supabase.from("payments").delete().eq("id", payment.id).eq("company_id", companyId);
+      alert("Bank transaction error: " + (bankTransactionError?.message || "Transaction not created"));
+      setLoading(false);
+      return;
+    }
+
+    const { error: balanceError } = await supabase
+      .from("bank_accounts")
+      .update({ current_balance: newBalance })
+      .eq("id", bankAccountId)
+      .eq("company_id", companyId);
+
+    if (balanceError) {
+      await supabase.from("bank_transactions").delete().eq("id", bankTransaction.id).eq("company_id", companyId);
+      await supabase.from("payments").delete().eq("id", payment.id).eq("company_id", companyId);
+      alert("Bank balance update error: " + balanceError.message);
       setLoading(false);
       return;
     }
@@ -160,7 +254,23 @@ export default function SupplierPaymentsPage() {
       });
 
     if (ledgerError) {
-      await supabase.from("payments").delete().eq("id", payment.id).eq("company_id", companyId);
+      await supabase
+        .from("bank_accounts")
+        .update({ current_balance: currentBalance })
+        .eq("id", bankAccountId)
+        .eq("company_id", companyId);
+
+      await supabase
+        .from("bank_transactions")
+        .delete()
+        .eq("id", bankTransaction.id)
+        .eq("company_id", companyId);
+
+      await supabase
+        .from("payments")
+        .delete()
+        .eq("id", payment.id)
+        .eq("company_id", companyId);
 
       alert("Supplier ledger error: " + ledgerError.message);
       setLoading(false);
@@ -176,10 +286,6 @@ export default function SupplierPaymentsPage() {
     alert("Supplier payment saved successfully.");
     setLoading(false);
   }
-
-  const selectedSupplier = suppliers.find(
-    (supplier) => supplier.id === supplierId
-  );
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -297,6 +403,26 @@ export default function SupplierPaymentsPage() {
                   <option>Bank Transfer</option>
                   <option>Cheque</option>
                   <option>Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-500">
+                  Bank / Cash Account
+                </label>
+                <select
+                  value={bankAccountId}
+                  onChange={(e) => setBankAccountId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
+                >
+                  <option value="">Select Account</option>
+                  {bankAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {(account.account_name || account.bank_name) +
+                        " - Balance ₹" +
+                        Number(account.current_balance || 0).toFixed(2)}
+                    </option>
+                  ))}
                 </select>
               </div>
 

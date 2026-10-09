@@ -31,6 +31,8 @@ export default function CustomerPaymentsPage() {
   );
   const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("Cash");
+  const [bankAccounts, setBankAccounts] = useState<{ id: string; account_name: string | null; bank_name: string; current_balance: number | null; account_type: string | null }[]>([]);
+  const [bankAccountId, setBankAccountId] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -57,6 +59,30 @@ export default function CustomerPaymentsPage() {
 
     setCustomers(data || []);
   }
+
+  async function loadBankAccounts() {
+    const companyId = await getCurrentCompanyId();
+
+    if (!companyId) {
+      setBankAccounts([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("bank_accounts")
+      .select("id,account_name,bank_name,current_balance,account_type")
+      .eq("company_id", companyId)
+      .eq("active", true)
+      .order("account_name");
+
+    if (error) {
+      alert("Bank/Cash accounts load error: " + error.message);
+      return;
+    }
+
+    setBankAccounts(data || []);
+  }
+
 
   async function loadCustomerLedger(id: string) {
     const companyId = await getCurrentCompanyId();
@@ -95,6 +121,7 @@ export default function CustomerPaymentsPage() {
 
   useEffect(() => {
     loadCustomers();
+    loadBankAccounts();
   }, []);
 
   useEffect(() => {
@@ -140,6 +167,11 @@ export default function CustomerPaymentsPage() {
       return;
     }
 
+    if (!bankAccountId) {
+      alert("Bank / Cash Account select karein.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -158,6 +190,7 @@ export default function CustomerPaymentsPage() {
             payment_date: paymentDate,
             amount: paymentAmount,
             payment_mode: paymentMode,
+            bank_account_id: bankAccountId,
             reference_number:
               referenceNumber.trim() || null,
             notes: notes.trim() || null,
@@ -168,6 +201,86 @@ export default function CustomerPaymentsPage() {
       if (paymentError) {
         throw new Error(
           "Payment save error: " + paymentError.message
+        );
+      }
+
+      const selectedBankAccount = bankAccounts.find(
+        (account) => account.id === bankAccountId
+      );
+
+      if (!selectedBankAccount) {
+        await supabase
+          .from("payments")
+          .delete()
+          .eq("id", payment.id)
+          .eq("company_id", companyId);
+
+        throw new Error("Selected Bank / Cash account not found.");
+      }
+
+      const currentBalance = Number(
+        selectedBankAccount.current_balance || 0
+      );
+
+      const newBalance = currentBalance + paymentAmount;
+
+      const { data: bankTransaction, error: bankTransactionError } =
+        await supabase
+          .from("bank_transactions")
+          .insert({
+            company_id: companyId,
+            bank_account_id: bankAccountId,
+            transaction_date: paymentDate,
+            transaction_type: "MONEY_IN",
+            amount: paymentAmount,
+            debit: 0,
+            credit: paymentAmount,
+            payment_mode: paymentMode,
+            reference_number:
+              referenceNumber.trim() || null,
+            description:
+              notes.trim() ||
+              "Customer Payment - " + customerId,
+          })
+          .select("id")
+          .single();
+
+      if (bankTransactionError || !bankTransaction) {
+        await supabase
+          .from("payments")
+          .delete()
+          .eq("id", payment.id)
+          .eq("company_id", companyId);
+
+        throw new Error(
+          "Bank transaction error: " +
+            (bankTransactionError?.message || "Transaction not created.")
+        );
+      }
+
+      const { error: balanceError } = await supabase
+        .from("bank_accounts")
+        .update({
+          current_balance: newBalance,
+        })
+        .eq("id", bankAccountId)
+        .eq("company_id", companyId);
+
+      if (balanceError) {
+        await supabase
+          .from("bank_transactions")
+          .delete()
+          .eq("id", bankTransaction.id)
+          .eq("company_id", companyId);
+
+        await supabase
+          .from("payments")
+          .delete()
+          .eq("id", payment.id)
+          .eq("company_id", companyId);
+
+        throw new Error(
+          "Bank balance update error: " + balanceError.message
         );
       }
 
@@ -187,6 +300,20 @@ export default function CustomerPaymentsPage() {
         });
 
       if (ledgerError) {
+        await supabase
+          .from("bank_transactions")
+          .delete()
+          .eq("id", bankTransaction.id)
+          .eq("company_id", companyId);
+
+        await supabase
+          .from("bank_accounts")
+          .update({
+            current_balance: currentBalance,
+          })
+          .eq("id", bankAccountId)
+          .eq("company_id", companyId);
+
         await supabase
           .from("payments")
           .delete()
@@ -302,6 +429,28 @@ export default function CustomerPaymentsPage() {
                 </option>
                 <option value="Cheque">Cheque</option>
                 <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Bank / Cash Account
+              </label>
+
+              <select
+                value={bankAccountId}
+                onChange={(e) => setBankAccountId(e.target.value)}
+                className="w-full rounded-lg border p-3"
+              >
+                <option value="">Select Account</option>
+
+                {bankAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {(account.account_name || account.bank_name) +
+                      " - Balance ₹" +
+                      Number(account.current_balance || 0).toFixed(2)}
+                  </option>
+                ))}
               </select>
             </div>
 
