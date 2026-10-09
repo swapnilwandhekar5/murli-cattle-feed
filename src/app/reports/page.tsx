@@ -69,6 +69,17 @@ type BankAccount = {
   account_type: string | null;
 };
 
+type BankTransaction = {
+  id: string;
+  bank_account_id: string | null;
+  transaction_date: string;
+  transaction_type: string;
+  amount: number | null;
+  payment_mode: string | null;
+  reference_number: string | null;
+  description: string | null;
+};
+
 export default function ReportsPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [production, setProduction] = useState<Production[]>([]);
@@ -77,6 +88,7 @@ export default function ReportsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
 
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -102,6 +114,7 @@ export default function ReportsPage() {
       productsResult,
       ledgerResult,
       accountsResult,
+      bankTransactionsResult,
     ] = await Promise.all([
       supabase
         .from("sales")
@@ -144,6 +157,12 @@ export default function ReportsPage() {
         .select("id,account_name,bank_name,current_balance,account_type")
         .eq("company_id", companyId)
         .order("account_name"),
+
+      supabase
+        .from("bank_transactions")
+        .select("id,bank_account_id,transaction_date,transaction_type,amount,payment_mode,reference_number,description")
+        .eq("company_id", companyId)
+        .order("transaction_date", { ascending: false }),
     ]);
 
     setSales(salesResult.data || []);
@@ -153,6 +172,11 @@ export default function ReportsPage() {
     setProducts(productsResult.data || []);
     setLedger(ledgerResult.data || []);
     setAccounts(accountsResult.data || []);
+    setBankTransactions(bankTransactionsResult.data || []);
+
+    if (bankTransactionsResult.error) {
+      console.error("Bank transactions report load error:", bankTransactionsResult.error);
+    }
 
     setLoading(false);
   }
@@ -170,6 +194,12 @@ export default function ReportsPage() {
   const filteredProduction = production.filter((item) => {
     if (fromDate && item.production_date < fromDate) return false;
     if (toDate && item.production_date > toDate) return false;
+    return true;
+  });
+
+  const filteredBankTransactions = bankTransactions.filter((item) => {
+    if (fromDate && item.transaction_date < fromDate) return false;
+    if (toDate && item.transaction_date > toDate) return false;
     return true;
   });
 
@@ -247,6 +277,10 @@ export default function ReportsPage() {
 
   function productName(productId: string) {
     return products.find((product) => product.id === productId)?.name || "Unknown Product";
+  }
+
+  function bankAccountName(accountId: string | null) {
+    return accounts.find((account) => account.id === accountId)?.account_name || "Unknown Account";
   }
 
   return (
@@ -627,6 +661,61 @@ export default function ReportsPage() {
                 </div>
               </div>
             </div>
+
+            <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-extrabold text-slate-900">Bank & Cash Transaction History</h2>
+                  <p className="text-xs text-slate-400">Customer receipts, supplier payments and manual entries for the selected period</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                  {filteredBankTransactions.length} transactions
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] text-left">
+                  <thead className="border-b border-slate-100 bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-3 text-xs font-bold text-slate-500">Date</th>
+                      <th className="px-3 py-3 text-xs font-bold text-slate-500">Account</th>
+                      <th className="px-3 py-3 text-xs font-bold text-slate-500">Description</th>
+                      <th className="px-3 py-3 text-xs font-bold text-slate-500">Type</th>
+                      <th className="px-3 py-3 text-xs font-bold text-slate-500">Mode</th>
+                      <th className="px-3 py-3 text-xs font-bold text-slate-500">Reference</th>
+                      <th className="px-3 py-3 text-right text-xs font-bold text-slate-500">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredBankTransactions.map((transaction) => {
+                      const moneyIn = transaction.transaction_type === "MONEY_IN";
+                      return (
+                        <tr key={transaction.id}>
+                          <td className="px-3 py-3 text-sm text-slate-600">{transaction.transaction_date}</td>
+                          <td className="px-3 py-3 text-sm font-semibold text-slate-800">{bankAccountName(transaction.bank_account_id)}</td>
+                          <td className="px-3 py-3 text-sm text-slate-600">{transaction.description || "—"}</td>
+                          <td className={`px-3 py-3 text-sm font-bold ${moneyIn ? "text-green-600" : "text-red-600"}`}>
+                            {moneyIn ? "Money In" : "Money Out"}
+                          </td>
+                          <td className="px-3 py-3 text-sm text-slate-600">{transaction.payment_mode || "—"}</td>
+                          <td className="px-3 py-3 text-sm text-slate-600">{transaction.reference_number || "—"}</td>
+                          <td className={`px-3 py-3 text-right text-sm font-extrabold ${moneyIn ? "text-green-600" : "text-red-600"}`}>
+                            {moneyIn ? "+" : "−"}₹{Number(transaction.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredBankTransactions.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-8 text-center text-sm text-slate-400">
+                          No bank or cash transactions for the selected period.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </>
         )}
       </div>
