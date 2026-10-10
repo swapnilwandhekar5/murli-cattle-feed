@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import jsPDF from "jspdf";
+import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { getCurrentCompanyId } from "@/lib/company";
 import {
@@ -94,6 +96,26 @@ export default function ReportsPage() {
   const [toDate, setToDate] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [reportCompanyName, setReportCompanyName] = useState("Business");
+
+  useEffect(() => {
+    async function loadReportCompanyName() {
+      const companyId = await getCurrentCompanyId();
+      if (!companyId) return;
+
+      const { data, error } = await supabase
+        .from("companies")
+        .select("name")
+        .eq("id", companyId)
+        .maybeSingle();
+
+      if (!error && data?.name) {
+        setReportCompanyName(data.name);
+      }
+    }
+
+    loadReportCompanyName();
+  }, []);
 
   async function loadReports() {
     setLoading(true);
@@ -265,6 +287,62 @@ export default function ReportsPage() {
         indicativeDifference: totals.sales - totals.productionCost,
       }));
   })();
+
+  function exportMonthlyExcel() {
+    const rows = monthlyReport.map((item) => ({
+      Month: item.month,
+      Sales: item.sales,
+      "Production Cost": item.productionCost,
+      "Indicative Difference": item.indicativeDifference,
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Report");
+    XLSX.writeFile(workbook, "FEEDORA-monthly-report.xlsx");
+  }
+
+  function exportMonthlyPDF() {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(`${reportCompanyName} Monthly Sales & Cost Report`, 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Period: ${fromDate || "All"} to ${toDate || "All"}`, 14, 26);
+
+    let y = 38;
+    doc.setFontSize(9);
+    doc.text("Month", 14, y);
+    doc.text("Sales", 70, y);
+    doc.text("Production Cost", 110, y);
+    doc.text("Difference", 165, y);
+    y += 7;
+
+    for (const item of monthlyReport) {
+      if (y > 275) {
+        doc.addPage();
+        y = 20;
+      }
+      const monthLabel = new Date(
+        Number(item.month.slice(0, 4)),
+        Number(item.month.slice(5, 7)) - 1,
+        1
+      ).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+
+      doc.text(monthLabel, 14, y);
+      doc.text(item.sales.toFixed(2), 70, y);
+      doc.text(item.productionCost.toFixed(2), 110, y);
+      doc.text(item.indicativeDifference.toFixed(2), 165, y);
+      y += 7;
+    }
+
+    doc.setFontSize(8);
+    doc.text(
+      "Indicative difference is not actual net profit; other expenses and inventory matching are excluded.",
+      14,
+      Math.min(y + 8, 285)
+    );
+    doc.save("FEEDORA-monthly-report.pdf");
+  }
+
 
   const customerOutstanding = ledger
     .filter((entry) => entry.customer_id)
@@ -569,10 +647,26 @@ export default function ReportsPage() {
             </div>
 
             <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-5">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-lg font-extrabold text-slate-900">
                   Monthly Sales & Cost Report
                 </h2>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={exportMonthlyPDF}
+                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+                  >
+                    Download PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportMonthlyExcel}
+                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+                  >
+                    Export Excel
+                  </button>
+                </div>
                 <p className="mt-1 text-sm text-slate-500">
                   Month-wise sales and production cost for the selected date range.
                 </p>
