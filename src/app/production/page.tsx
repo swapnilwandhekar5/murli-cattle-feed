@@ -33,6 +33,11 @@ type Recipe = {
   id: string;
   product_id: string;
   quantity_kg: number;
+  name?: string;
+  products?: {
+    name: string;
+    bag_size_kg?: number;
+  }[];
 };
 
 type Production = {
@@ -58,6 +63,7 @@ export default function ProductionPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [productions, setProductions] = useState<Production[]>([]);
+  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
 
   const [productId, setProductId] = useState("");
   const [recipe, setRecipe] = useState<Recipe | null>(null);
@@ -471,7 +477,7 @@ export default function ProductionPage() {
       return;
     }
 
-    const [productsResult, materialsResult, productionResult] =
+    const [productsResult, materialsResult, recipesResult, productionResult] =
       await Promise.all([
         supabase
           .from("products")
@@ -486,6 +492,12 @@ export default function ProductionPage() {
           .eq("company_id", companyId)
           .eq("active", true)
           .order("name"),
+
+        supabase
+          .from("recipes")
+          .select("id, product_id, quantity_kg, name, products(name, bag_size_kg)")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false }),
 
         supabase
           .from("production_batches")
@@ -521,6 +533,13 @@ export default function ProductionPage() {
       console.log("Materials:", materialsResult.error.message);
     } else {
       setMaterials(materialsResult.data || []);
+    }
+
+    if (recipesResult.error) {
+      console.log("Recipes:", recipesResult.error.message);
+      setSavedRecipes([]);
+    } else {
+      setSavedRecipes((recipesResult.data as Recipe[]) || []);
     }
 
     if (productionResult.error) {
@@ -890,7 +909,7 @@ export default function ProductionPage() {
     return (
       <main className="min-h-screen bg-slate-100 p-8">
         <div className="rounded-xl bg-white p-6 shadow">
-          Loading Production...
+          Loading Manufacturing...
         </div>
       </main>
     );
@@ -1397,7 +1416,7 @@ export default function ProductionPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-slate-900">
-            Production Management
+            Manufacturing
           </h1>
           <p className="mt-1 text-slate-600">
             Recipe ke basis par production cost aur raw-material consumption.
@@ -1743,6 +1762,86 @@ export default function ProductionPage() {
             </div>
           </section>
         </div>
+
+        <section className="mt-6 rounded-2xl bg-white p-6 shadow">
+          <h2 className="mb-4 text-xl font-bold">Saved Recipes</h2>
+          {savedRecipes.length === 0 ? (
+            <p className="text-slate-500">Abhi koi saved recipe nahi hai. Product select karke Create / Edit Recipe use karein.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="p-3">Product</th>
+                    <th className="p-3">Recipe</th>
+                    <th className="p-3">Batch Quantity (KG)</th>
+                    <th className="p-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedRecipes.map((savedRecipe) => (
+                    <tr key={savedRecipe.id} className="border-b">
+                      <td className="p-3">
+                        {products.find((item) => item.id === savedRecipe.product_id)?.name || savedRecipe.products?.[0]?.name || "-"}
+                      </td>
+                      <td className="p-3">{savedRecipe.name || "Recipe"}</td>
+                      <td className="p-3">{savedRecipe.quantity_kg}</td>
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductId(savedRecipe.product_id);
+                            setTimeout(() => {
+                              void (async () => {
+                                const companyId = await getCurrentCompanyId();
+                                if (!companyId) {
+                                  alert("Company nahi mili");
+                                  return;
+                                }
+                                const { data: recipeData, error: recipeError } = await supabase
+                                  .from("recipes")
+                                  .select("id, product_id, name, quantity_kg")
+                                  .eq("id", savedRecipe.id)
+                                  .eq("company_id", companyId)
+                                  .eq("active", true)
+                                  .maybeSingle();
+                                if (recipeError || !recipeData) {
+                                  alert("Recipe load error: " + (recipeError?.message || "Recipe nahi mili"));
+                                  return;
+                                }
+                                const { data: itemData, error: itemError } = await supabase
+                                  .from("recipe_items")
+                                  .select("id, raw_material_id, quantity_kg")
+                                  .eq("recipe_id", recipeData.id)
+                                  .eq("company_id", companyId)
+                                  .order("created_at");
+                                if (itemError) {
+                                  alert("Recipe materials load error: " + itemError.message);
+                                  return;
+                                }
+                                setRecipe(recipeData);
+                                setRecipeName(recipeData.name || "");
+                                setRecipeBatchKg(String(recipeData.quantity_kg || ""));
+                                setRecipeRows((itemData || []).map((item) => ({
+                                  raw_material_id: item.raw_material_id,
+                                  quantity_kg: String(item.quantity_kg || ""),
+                                })));
+                                setShowRecipeEditor(true);
+                              })();
+                            }, 0);
+                          }}
+                          className="rounded-lg border border-blue-600 px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50"
+                        >
+                          Edit Recipe
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
         <section className="mt-6 rounded-2xl bg-white p-6 shadow">
           <h2 className="mb-4 text-xl font-bold">Production History</h2>

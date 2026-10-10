@@ -32,11 +32,10 @@ const menuSections = [
     ],
   },
   {
-    title: "INVENTORY & PRODUCTION",
+    title: "INVENTORY & MANUFACTURING",
     items: [
       { name: "Raw Materials", href: "/raw-materials", icon: Package },
-      { name: "Products & Recipes", href: "/recipes", icon: Boxes },
-      { name: "Production", href: "/production", icon: Factory },
+      { name: "Manufacturing", href: "/production", icon: Factory },
       { name: "Finished Stock", href: "/finished-stock", icon: Boxes },
     ],
   },
@@ -54,7 +53,7 @@ const menuSections = [
     title: "ACCOUNTS",
     items: [
       { name: "Bank & Cash", href: "/bank-cash", icon: Landmark },
-      { name: "Suppliers", href: "/suppliers", icon: Truck },
+      { name: "Vendors", href: "/suppliers", icon: Truck },
       { name: "Supplier Payments", href: "/supplier-payments", icon: CreditCard },
       { name: "Reports", href: "/reports", icon: BarChart3 },
     ],
