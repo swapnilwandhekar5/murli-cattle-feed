@@ -231,6 +231,7 @@ export default function RecipesPage() {
     }
 
     const recipeItems = validItems.map((item) => ({
+      company_id: companyId,
       recipe_id: recipe.id,
       raw_material_id: item.raw_material_id,
       quantity_kg: Number(item.quantity),
